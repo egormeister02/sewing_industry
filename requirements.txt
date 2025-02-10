@@ -1,0 +1,7 @@
+quart
+aiogram
+aiohttp
+pillow
+pyzbar
+hypercorn
+aiosqlite
