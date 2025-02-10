@@ -1,6 +1,5 @@
 # database.py
 import aiosqlite
-import os
 from contextlib import asynccontextmanager
 from credentials import DB_PATH 
 
@@ -21,11 +20,14 @@ class Database:
             self.conn = await aiosqlite.connect(DB_PATH)
         yield self.conn
     
+    @asynccontextmanager
     async def execute(self, query, args=()):
         async with self.get_connection() as conn:
             cursor = await conn.execute(query, args)
-            await conn.commit()
-            return cursor
+            try:
+                yield cursor
+            finally:
+                await conn.commit()
     
     async def fetchall(self, cursor):
         return await cursor.fetchall()
