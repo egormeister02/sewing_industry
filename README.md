@@ -2,8 +2,8 @@ data: sqlLite + google sheet
 application: quart + hypercorn + nginx
 
 structure:\
-project/\
-├── app/\
+project\
+├── app\
 │   ├── __init__.py\
 │   ├── main.py\
 │   ├── database/\
@@ -26,7 +26,7 @@ project/\
 │       └── managers.py\
 ├── credentials.py\
 ├── schema.sql\
-└── requirements.txt\
+└── requirements.txt
 
 database:
 
