@@ -1,10 +1,8 @@
 from quart import Quart, request, jsonify
-from aiogram import Bot, Dispatcher, types
-from aiogram.client.default import DefaultBotProperties
+from aiogram import Dispatcher, types
 from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.enums import ParseMode
 import asyncio
-from app.handlers import start, managers, qr_codes
+from app.handlers import start, managers, qr_codes, seamstress, cutter, controller
 from app.database import init_db
 from app.credentials import WEBHOOK_URL
 from app.bot import bot
@@ -17,6 +15,9 @@ dp = Dispatcher(storage=storage)
 dp.include_router(start.router)
 dp.include_router(managers.router)
 dp.include_router(qr_codes.router)
+dp.include_router(seamstress.router)
+dp.include_router(cutter.router)
+dp.include_router(controller.router)
 
 # Инициализация БД
 @app.before_serving

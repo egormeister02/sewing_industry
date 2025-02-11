@@ -2,6 +2,7 @@ from aiogram import Router, types
 from aiogram.fsm.context import FSMContext
 from app.states.managers import ManagerStates, RegistrationStates
 from app.keyboards.inline import manager_menu, cancel_button
+from app.handlers import seamstress, cutter, controller
 from app import db
 
 router = Router()
@@ -52,8 +53,12 @@ async def process_registration_phone(message: types.Message, state: FSMContext):
         
         if data['job'] == 'manager':
             await show_manager_menu(message)
-        else:
-            await message.answer("Регистрация завершена!")
+        elif data['job'] == 'seamstress':
+            await seamstress.show_seamstress_menu(message)
+        elif data['job'] == 'cutter':
+            await cutter.show_cutter_menu(message)
+        elif data['job'] == 'controller':
+            await controller.show_controller_menu(message)
         
         await state.clear()
     except Exception as e:

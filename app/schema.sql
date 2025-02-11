@@ -14,15 +14,18 @@ CREATE TABLE IF NOT EXISTS employees (
     phone_number VARCHAR(20)
 );
 
-CREATE TABLE IF NOT EXISTS pack (
-    pack_id SERIAL PRIMARY KEY,
+CREATE TABLE IF NOT EXISTS batches (
+    batch_id INTEGER PRIMARY KEY AUTOINCREMENT,
     project_nm VARCHAR(255),
-    product_id INT REFERENCES products(product_id),
+    product_nm VARCHAR(50),
     color VARCHAR(50),
     size VARCHAR(50),
+    quantity INT,
+    parts_count INT,
     cutter_id INT REFERENCES employees(employee_id),
     seamstress_id INT REFERENCES employees(employee_id),
     status VARCHAR(50),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     sew_start_dttm TIMESTAMP,
     sew_end_dttm TIMESTAMP
 );
