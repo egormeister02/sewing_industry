@@ -2,7 +2,7 @@ from aiogram import Router, types
 from aiogram.fsm.context import FSMContext
 from aiogram.filters import Command
 from app.states.managers import RegistrationStates
-from app.keyboards.inline import seamstress_menu, cancel_button
+from app.keyboards.inline import seamstress_menu, cancel_button_seamstress
 from app import db
 
 router = Router()

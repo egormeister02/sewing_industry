@@ -3,7 +3,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import BufferedInputFile
 from io import BytesIO
 from app.states.cutter import CutterStates
-from app.keyboards.inline import cutter_menu, cancel_button
+from app.keyboards.inline import cutter_menu, cancel_button_cutter
 from app.services import generate_qr_code
 from app import db
 
@@ -26,6 +26,15 @@ async def new_cutter_menu(callback: types.CallbackQuery):
         "Меню раскройщика:",
         reply_markup=cutter_menu()
     )
+
+@router.callback_query(lambda c: c.data == 'cancel_cutter')
+async def cancel_cutter_actions(callback: types.CallbackQuery, state: FSMContext):
+    await state.clear()
+    await callback.message.edit_text(
+        "Действие отменено",
+        reply_markup=cutter_menu()
+    )
+    await callback.answer()
 
 @router.callback_query(lambda c: c.data == "cutter_data")
 async def show_cutter_data(callback: types.CallbackQuery):
@@ -60,14 +69,14 @@ async def create_batch_start(callback: types.CallbackQuery, state: FSMContext):
     await state.set_state(CutterStates.waiting_for_project_name)
     await callback.message.edit_text(
         "Введите название проекта:",
-        reply_markup=cancel_button()
+        reply_markup=cancel_button_cutter()
     )
 @router.message(CutterStates.waiting_for_project_name)
 async def process_project_name(message: types.Message, state: FSMContext):
     await state.update_data(project_name=message.text)
     await state.set_state(CutterStates.waiting_for_product_name)
     await message.answer("Введите название изделия:",
-        reply_markup=cancel_button()
+        reply_markup=cancel_button_cutter()
     )
 
 @router.message(CutterStates.waiting_for_product_name)
@@ -75,7 +84,7 @@ async def process_product_name(message: types.Message, state: FSMContext):
     await state.update_data(product_name=message.text)
     await state.set_state(CutterStates.waiting_for_color)
     await message.answer("Введите цвет изделия:",
-        reply_markup=cancel_button()
+        reply_markup=cancel_button_cutter()
     )
 
 @router.message(CutterStates.waiting_for_color)
@@ -83,7 +92,7 @@ async def process_color(message: types.Message, state: FSMContext):
     await state.update_data(color=message.text)
     await state.set_state(CutterStates.waiting_for_size)
     await message.answer("Введите размер изделия:",
-        reply_markup=cancel_button()
+        reply_markup=cancel_button_cutter()
     )
 
 @router.message(CutterStates.waiting_for_size)
@@ -91,7 +100,7 @@ async def process_size(message: types.Message, state: FSMContext):
     await state.update_data(size=message.text)
     await state.set_state(CutterStates.waiting_for_quantity)
     await message.answer("Введите количество изделий в пачке:",
-        reply_markup=cancel_button()
+        reply_markup=cancel_button_cutter()
     )
 
 @router.message(CutterStates.waiting_for_quantity)
@@ -101,11 +110,11 @@ async def process_quantity(message: types.Message, state: FSMContext):
         await state.update_data(quantity=quantity)
         await state.set_state(CutterStates.waiting_for_parts_count)
         await message.answer("Введите количество деталей в одном изделии:",
-        reply_markup=cancel_button()
+        reply_markup=cancel_button_cutter()
     )
     except ValueError:
         await message.answer("Пожалуйста, введите целое число:",
-        reply_markup=cancel_button()
+        reply_markup=cancel_button_cutter()
     )
 
 @router.message(CutterStates.waiting_for_parts_count)

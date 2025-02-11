@@ -16,9 +16,24 @@ def manager_menu():
         [InlineKeyboardButton(text="Создать образец", callback_data="manager_create_product")],
     ])
 
-def cancel_button():
+def cancel_button_manager():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="Отмена", callback_data="cancel")]
+        [InlineKeyboardButton(text="Отмена", callback_data="cancel_manager")]
+    ])
+
+def cancel_button_seamstress():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="Отмена", callback_data="cancel_seamstress")]
+    ])
+
+def cancel_button_cutter():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="Отмена", callback_data="cancel_cutter")]
+    ])
+
+def cancel_button_controller():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="Отмена", callback_data="cancel_controller")]
     ])
 
 def seamstress_menu():

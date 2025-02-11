@@ -1,7 +1,7 @@
 from aiogram import Router, types
 from aiogram.fsm.context import FSMContext
 from app.states.managers import ManagerStates, RegistrationStates
-from app.keyboards.inline import manager_menu, cancel_button
+from app.keyboards.inline import manager_menu, cancel_button_manager
 from app.handlers import seamstress, cutter, controller
 from app import db
 
@@ -36,7 +36,7 @@ async def process_role(callback: types.CallbackQuery, state: FSMContext):
 async def process_registration_name(message: types.Message, state: FSMContext):
     await state.update_data(name=message.text)
     await state.set_state(RegistrationStates.waiting_for_phone)
-    await message.answer("Введите ваш контактный телефон:", reply_markup=cancel_button())
+    await message.answer("Введите ваш контактный телефон:", reply_markup=cancel_button_manager())
 
 @router.message(RegistrationStates.waiting_for_phone)
 async def process_registration_phone(message: types.Message, state: FSMContext):
@@ -70,7 +70,7 @@ async def create_product_start(callback: types.CallbackQuery, state: FSMContext)
     await state.set_state(ManagerStates.waiting_for_name)
     await callback.message.edit_text(
         "Введите название образца:",
-        reply_markup=cancel_button()
+        reply_markup=cancel_button_manager()
     )
 
 @router.callback_query(lambda c: c.data == 'manager_analytics')
@@ -99,7 +99,7 @@ async def get_analytics(callback: types.CallbackQuery, state: FSMContext):
         await callback.message.edit_text(products_text)
         await new_manager_menu(callback)
 
-@router.callback_query(lambda c: c.data == 'cancel')
+@router.callback_query(lambda c: c.data == 'cancel_manager')
 async def cancel_creation(callback: types.CallbackQuery, state: FSMContext):
     await state.clear()
     await callback.message.edit_text(
@@ -114,7 +114,7 @@ async def process_name(message: types.Message, state: FSMContext):
     await state.set_state(ManagerStates.waiting_for_parts_number)
     await message.answer(
         "Введите номер детали:",
-        reply_markup=cancel_button()
+        reply_markup=cancel_button_manager()
     )
 
 @router.message(ManagerStates.waiting_for_parts_number)
@@ -123,7 +123,7 @@ async def process_parts_number(message: types.Message, state: FSMContext):
     await state.set_state(ManagerStates.waiting_for_product_cost)
     await message.answer(
         "Введите стоимость продукта:",
-        reply_markup=cancel_button()
+        reply_markup=cancel_button_manager()
     )
 
 @router.message(ManagerStates.waiting_for_product_cost)
@@ -134,7 +134,7 @@ async def process_product_cost(message: types.Message, state: FSMContext):
         await state.set_state(ManagerStates.waiting_for_detail_payment)
         await message.answer(
             "Введите стоимость детали:",
-            reply_markup=cancel_button()
+            reply_markup=cancel_button_manager()
         )
     except ValueError:
         await message.answer("Пожалуйста, введите корректное число!")

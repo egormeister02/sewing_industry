@@ -1,7 +1,7 @@
 from aiogram import Router, types
 from aiogram.fsm.context import FSMContext
 from app.states.managers import ManagerStates, RegistrationStates
-from app.keyboards.inline import controller_menu, cancel_button
+from app.keyboards.inline import controller_menu, cancel_button_controller
 from app import db
 
 router = Router()
