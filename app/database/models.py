@@ -1,11 +1,10 @@
-# database.py
 import aiosqlite
 from contextlib import asynccontextmanager
-from credentials import DB_PATH 
+from app.credentials import DB_PATH 
 
 async def init_db():
     async with aiosqlite.connect(DB_PATH) as conn:
-        with open('schema.sql', 'r') as f:
+        with open('app/schema.sql', 'r') as f:
             schema = f.read()
         await conn.executescript(schema)
         await conn.commit()
