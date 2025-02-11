@@ -1,4 +1,4 @@
-data: sqlLite + google sheet
+data: sqlLite + google sheet\
 application: quart + hypercorn + nginx
 
 structure:\

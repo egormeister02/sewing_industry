@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS products (
 
 CREATE TABLE IF NOT EXISTS employees (
     employee_id SERIAL PRIMARY KEY,
+    tg_id INT,
     name VARCHAR(255),
     job VARCHAR(255),
     phone_number VARCHAR(20)
