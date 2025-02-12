@@ -49,7 +49,7 @@ def cutter_menu():
         [InlineKeyboardButton(text="Мои данные", callback_data="cutter_data")],
         [InlineKeyboardButton(text="Мои выплаты", callback_data="cutter_payments")],
         [InlineKeyboardButton(text="Создать пачку", callback_data="cutter_create_batch")],
-        [InlineKeyboardButton(text="Заявка на ремонт", callback_data="cutter_repair")],
+        [InlineKeyboardButton(text="Заявка на ремонт", callback_data="repair")],
     ])
 
 def controller_menu():

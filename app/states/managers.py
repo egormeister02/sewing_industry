@@ -9,3 +9,8 @@ class ManagerStates(StatesGroup):
 class RegistrationStates(StatesGroup):
     waiting_for_name = State()
     waiting_for_phone = State()
+
+class RemakeRequest(StatesGroup):
+    waiting_for_equipment = State()
+    waiting_for_description = State()
+        

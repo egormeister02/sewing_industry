@@ -2,7 +2,7 @@ from aiogram import Router, types
 from aiogram.fsm.context import FSMContext
 from aiogram.types import BufferedInputFile
 from io import BytesIO
-from app.states.cutter import CutterStates
+from app.states import CutterStates, RemakeRequest
 from app.keyboards.inline import cutter_menu, cancel_button_cutter
 from app.services import generate_qr_code
 from app import db
@@ -167,3 +167,40 @@ async def process_parts_count(message: types.Message, state: FSMContext):
     except Exception as e:
         await message.answer(f"Ошибка создания пачки: {str(e)}")
         await state.clear()
+        await show_cutter_menu(message)
+
+
+@router.callback_query(lambda c: c.data =="repair")
+async def request_remake(callback: types.CallbackQuery, state: FSMContext):
+    await callback.message.answer("Введите название оборудования, требующего ремонта:")
+    await state.set_state(RemakeRequest.waiting_for_equipment)
+
+@router.message(RemakeRequest.waiting_for_equipment)
+async def process_equipment_name(message: types.Message, state: FSMContext):
+    await state.update_data(equipment=message.text)
+    await state.set_state(RemakeRequest.waiting_for_description)
+    await message.answer(
+        "Опишите проблему с оборудованием:",
+        reply_markup=cancel_button_cutter()
+    )
+
+@router.message(RemakeRequest.waiting_for_description)
+async def process_remake_description(message: types.Message, state: FSMContext):        
+    data = await state.get_data()
+    try:
+        async with db.execute(
+            """INSERT INTO remakes 
+            (equipment_nm, description, applicant_id, remake_status, request_dttm)
+            VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)""",
+            (data['equipment'], message.text, message.from_user.id, 'создана')
+        )as cursor:
+            await db.fetchall(cursor)
+            
+        await message.answer("✅ Заявка на ремонт создана!")
+        await state.clear()
+        await show_cutter_menu(message)
+        
+    except Exception as e:
+        await message.answer(f"Ошибка при создании заявки: {str(e)}")
+        await state.clear()
+        await show_cutter_menu(message)
