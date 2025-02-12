@@ -38,11 +38,28 @@ def cancel_button_controller():
 
 def seamstress_menu():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="Мои данные", callback_data="seamstress_data")],
-        [InlineKeyboardButton(text="Мои выплаты", callback_data="seamstress_payments")],
-        [InlineKeyboardButton(text="Взять пачку", callback_data="seamstress_make_batch")],
-        [InlineKeyboardButton(text="Заявка на ремонт", callback_data="seamstress_repair")],
+        [InlineKeyboardButton(text="Мои данные", callback_data="seamstress_data"),
+         InlineKeyboardButton(text="Мои выплаты", callback_data="seamstress_payments")],
+        [InlineKeyboardButton(text="Взять пачку", callback_data="seamstress_take_batch"),
+         InlineKeyboardButton(text="Мои пачки", callback_data="seamstress_batches")],
+        [InlineKeyboardButton(text="Заявка на ремонт", callback_data="seamstress_repair")]
     ])
+
+def seamstress_batch():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="✅ Принять", callback_data="accept_batch"),
+            InlineKeyboardButton(text="❌ Отказаться", callback_data="decline_batch")
+        ]
+    ])
+
+def seamstress_batches_menu(batches):
+    buttons = [
+        [InlineKeyboardButton(text=f"Пачка #{batch[0]}", callback_data=f"seamstress_batch_{batch[0]}")]
+        for batch in batches
+    ]
+    buttons.append([InlineKeyboardButton(text="OK", callback_data="seamstress_ok")])
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 def cutter_menu():
     return InlineKeyboardMarkup(inline_keyboard=[

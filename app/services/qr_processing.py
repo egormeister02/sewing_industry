@@ -39,12 +39,7 @@ async def generate_qr_code(data: dict) -> bytes:
 
 
 async def process_qr_code(image_data: bytes) -> str:
-    """
-    Асинхронно обрабатывает изображение с QR-кодом.
     
-    :param image_data: Байты изображения
-    :return: Декодированный текст из QR-кода или сообщение об ошибке
-    """
     try:
         loop = asyncio.get_event_loop()
         image = await loop.run_in_executor(None, Image.open, BytesIO(image_data))

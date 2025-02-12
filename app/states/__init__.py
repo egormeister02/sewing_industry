@@ -1,4 +1,3 @@
-from .managers import ManagerStates, RemakeRequest 
-from .cutter import CutterStates
+from .states import ManagerStates, RemakeRequest, CutterStates, SeamstressStates, RegistrationStates
 
-__all__ = ["ManagerStates", "CutterStates", "RemakeRequest"]
+__all__ = ["ManagerStates", "CutterStates", "SeamstressStates", "RemakeRequest", "RegistrationStates"]

@@ -1,6 +1,6 @@
 from aiogram import Router, types
 from aiogram.fsm.context import FSMContext
-from app.states.managers import ManagerStates, RegistrationStates
+from app.states import ManagerStates, RegistrationStates
 from app.keyboards.inline import manager_menu, cancel_button_manager
 from app.handlers import seamstress, cutter, controller
 from app import db
@@ -31,23 +31,18 @@ async def process_role(callback: types.CallbackQuery, state: FSMContext):
     await state.update_data(job=role)
     await state.set_state(RegistrationStates.waiting_for_name)
     await callback.message.answer("Введите ваше полное имя:")
+    await callback.answer()
 
 @router.message(RegistrationStates.waiting_for_name)
 async def process_registration_name(message: types.Message, state: FSMContext):
     await state.update_data(name=message.text)
-    await state.set_state(RegistrationStates.waiting_for_phone)
-    await message.answer("Введите ваш контактный телефон:", reply_markup=cancel_button_manager())
-
-@router.message(RegistrationStates.waiting_for_phone)
-async def process_registration_phone(message: types.Message, state: FSMContext):
     try:
         data = await state.get_data()
-        phone = message.text
-        
+
         async with db.execute(
-            """INSERT INTO employees (name, job, phone_number, tg_id)
-            VALUES (?, ?, ?, ?)""",
-            (data['name'], data['job'], phone, message.from_user.id)
+            """INSERT INTO employees (name, job, tg_id)
+            VALUES (?, ?, ?)""",
+            (data['name'], data['job'], message.from_user.id)
         ) as cursor:
             await db.fetchall(cursor)
         
@@ -106,6 +101,7 @@ async def cancel_creation(callback: types.CallbackQuery, state: FSMContext):
         "Создание отменено",
         reply_markup=manager_menu()
     )
+    await callback.answer()
 
 # Обработка ввода названия
 @router.message(ManagerStates.waiting_for_name)
