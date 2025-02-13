@@ -1,8 +1,7 @@
 from aiogram import Router, types
 from aiogram.fsm.context import FSMContext
-from app.states import ManagerStates, RegistrationStates
+from app.states import ManagerStates
 from app.keyboards.inline import manager_menu, cancel_button_manager
-from app.handlers import seamstress, cutter, controller
 from app import db
 
 router = Router()
@@ -25,40 +24,7 @@ async def new_manager_menu(callback: types.CallbackQuery):
         reply_markup=manager_menu()
     )
 
-@router.callback_query(lambda c: c.data.startswith('role_'))
-async def process_role(callback: types.CallbackQuery, state: FSMContext):
-    role = callback.data.split('_')[1]
-    await state.update_data(job=role)
-    await state.set_state(RegistrationStates.waiting_for_name)
-    await callback.message.answer("Введите ваше полное имя:")
-    await callback.answer()
 
-@router.message(RegistrationStates.waiting_for_name)
-async def process_registration_name(message: types.Message, state: FSMContext):
-    await state.update_data(name=message.text)
-    try:
-        data = await state.get_data()
-
-        async with db.execute(
-            """INSERT INTO employees (name, job, tg_id)
-            VALUES (?, ?, ?)""",
-            (data['name'], data['job'], message.from_user.id)
-        ) as cursor:
-            await db.fetchall(cursor)
-        
-        if data['job'] == 'manager':
-            await show_manager_menu(message)
-        elif data['job'] == 'seamstress':
-            await seamstress.show_seamstress_menu(message)
-        elif data['job'] == 'cutter':
-            await cutter.show_cutter_menu(message)
-        elif data['job'] == 'controller':
-            await controller.show_controller_menu(message)
-        
-        await state.clear()
-    except Exception as e:
-        await message.answer(f"Ошибка регистрации: {str(e)}")
-        await state.clear()
 
 @router.callback_query(lambda c: c.data == 'manager_create_product')
 async def create_product_start(callback: types.CallbackQuery, state: FSMContext):

@@ -16,33 +16,13 @@ def manager_menu():
         [InlineKeyboardButton(text="Создать образец", callback_data="manager_create_product")],
     ])
 
-def cancel_button_manager():
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="Отмена", callback_data="cancel_manager")]
-    ])
-
-def cancel_button_seamstress():
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="Отмена", callback_data="cancel_seamstress")]
-    ])
-
-def cancel_button_cutter():
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="Отмена", callback_data="cancel_cutter")]
-    ])
-
-def cancel_button_controller():
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="Отмена", callback_data="cancel_controller")]
-    ])
-
 def seamstress_menu():
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="Мои данные", callback_data="seamstress_data"),
          InlineKeyboardButton(text="Мои выплаты", callback_data="seamstress_payments")],
         [InlineKeyboardButton(text="Взять пачку", callback_data="seamstress_take_batch"),
          InlineKeyboardButton(text="Мои пачки", callback_data="seamstress_batches")],
-        [InlineKeyboardButton(text="Заявка на ремонт", callback_data="seamstress_repair")]
+        [InlineKeyboardButton(text="Заявка на ремонт", callback_data="repair")]
     ])
 
 def seamstress_batch():
@@ -77,3 +57,27 @@ def controller_menu():
         [InlineKeyboardButton(text="Статистика брака", callback_data="controller_defect_stats")],
     ])
 
+def cancel_button_manager():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="Отмена", callback_data="cancel_manager")]
+    ])
+
+def cancel_button_seamstress():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="Отмена", callback_data="cancel_seamstress")]
+    ])
+
+def cancel_button_cutter():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="Отмена", callback_data="cancel_cutter")]
+    ])
+
+def cancel_button_controller():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="Отмена", callback_data="cancel_controller")]
+    ])
+
+def cancel_button_trunk():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="Отмена", callback_data="cancel_trunk")]
+    ])

@@ -2,7 +2,7 @@ from quart import Quart, request, jsonify
 from aiogram import Dispatcher, types
 from aiogram.fsm.storage.memory import MemoryStorage
 import asyncio
-from app.handlers import start, managers, seamstress, cutter, controller
+from app.handlers import manager, seamstress, cutter, controller, trunk
 from app.database import init_db
 from app.credentials import WEBHOOK_URL
 from app.bot import bot
@@ -12,8 +12,8 @@ storage = MemoryStorage()
 dp = Dispatcher(storage=storage)
 
 # Регистрация обработчиков
-dp.include_router(start.router)
-dp.include_router(managers.router)
+dp.include_router(trunk.router)
+dp.include_router(manager.router)
 dp.include_router(seamstress.router)
 dp.include_router(cutter.router)
 dp.include_router(controller.router)
