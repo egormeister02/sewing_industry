@@ -5,6 +5,7 @@ from io import BytesIO
 from app.states import CutterStates
 from app.keyboards.inline import cutter_menu, cancel_button_cutter
 from app.services import generate_qr_code
+from app.handlers.trunk import delete_message_reply_markup
 from app import db
 
 router = Router()
@@ -73,6 +74,7 @@ async def create_batch_start(callback: types.CallbackQuery, state: FSMContext):
     )
 @router.message(CutterStates.waiting_for_project_name)
 async def process_project_name(message: types.Message, state: FSMContext):
+    await delete_message_reply_markup(message)
     await state.update_data(project_name=message.text)
     await state.set_state(CutterStates.waiting_for_product_name)
     await message.answer("Введите название изделия:",
@@ -81,6 +83,7 @@ async def process_project_name(message: types.Message, state: FSMContext):
 
 @router.message(CutterStates.waiting_for_product_name)
 async def process_product_name(message: types.Message, state: FSMContext):
+    await delete_message_reply_markup(message)
     await state.update_data(product_name=message.text)
     await state.set_state(CutterStates.waiting_for_color)
     await message.answer("Введите цвет изделия:",
@@ -89,6 +92,7 @@ async def process_product_name(message: types.Message, state: FSMContext):
 
 @router.message(CutterStates.waiting_for_color)
 async def process_color(message: types.Message, state: FSMContext):
+    await delete_message_reply_markup(message)
     await state.update_data(color=message.text)
     await state.set_state(CutterStates.waiting_for_size)
     await message.answer("Введите размер изделия:",
@@ -97,6 +101,7 @@ async def process_color(message: types.Message, state: FSMContext):
 
 @router.message(CutterStates.waiting_for_size)
 async def process_size(message: types.Message, state: FSMContext):
+    await delete_message_reply_markup(message)
     await state.update_data(size=message.text)
     await state.set_state(CutterStates.waiting_for_quantity)
     await message.answer("Введите количество изделий в пачке:",
@@ -105,6 +110,7 @@ async def process_size(message: types.Message, state: FSMContext):
 
 @router.message(CutterStates.waiting_for_quantity)
 async def process_quantity(message: types.Message, state: FSMContext):
+    await delete_message_reply_markup(message)
     try:
         quantity = int(message.text)
         await state.update_data(quantity=quantity)
@@ -119,6 +125,7 @@ async def process_quantity(message: types.Message, state: FSMContext):
 
 @router.message(CutterStates.waiting_for_parts_count)
 async def process_parts_count(message: types.Message, state: FSMContext):
+    await delete_message_reply_markup(message)
     try:
         parts_count = int(message.text)
         data = await state.get_data()
@@ -126,11 +133,11 @@ async def process_parts_count(message: types.Message, state: FSMContext):
         # Сохраняем данные в БД
         async with db.execute(
             """INSERT INTO batches 
-            (project_nm, product_nm, color, size, quantity, parts_count, cutter_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            (project_nm, product_nm, color, size, quantity, parts_count, cutter_id, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             RETURNING batch_id""",
             (data['project_name'], data['product_name'], data['color'], 
-             data['size'], data['quantity'], parts_count, message.from_user.id)
+             data['size'], data['quantity'], parts_count, message.from_user.id, 'created')
         ) as cursor:
             result = await cursor.fetchone()
             if not result or not result[0]:

@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS remakes (
     description VARCHAR(255) NOT NULL,
     applicant_id INT REFERENCES employees(tg_id),
     remake_status VARCHAR(64) NOT NULL,
-    request_dttm TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     remake_end_dttm TIMESTAMP
 );
 
