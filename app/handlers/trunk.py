@@ -102,7 +102,6 @@ async def process_registration_name(message: types.Message, state: FSMContext):
 async def approve_user(callback: types.CallbackQuery):
     try:
         user_id = int(callback.data.split('_')[-1])
-        
         # Обновляем статус пользователя
         async with db.execute(
             "UPDATE employees SET status = 'approved' WHERE tg_id = ?",
@@ -147,6 +146,7 @@ async def reject_user(callback: types.CallbackQuery):
             await db.fetchall(cursor)
 
         # Обновляем сообщение у менеджера
+        await callback.message.edit_reply_markup(reply_markup=None)
         await callback.message.edit_text(
             f"❌ Пользователь {user_id} отклонен",
             reply_markup=None
