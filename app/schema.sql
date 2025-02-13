@@ -1,9 +1,8 @@
 CREATE TABLE IF NOT EXISTS employees (
-    employee_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    tg_id INT,
-    name VARCHAR(64),
-    job VARCHAR(64),
-    phone_number VARCHAR(20)
+    tg_id INT PRIMARY KEY,
+    name VARCHAR(64) NOT NULL,
+    job VARCHAR(64) NOT NULL,
+    status VARCHAR(64) NOT NULL CHECK(status IN ('approved', 'pending'))
 );
 
 CREATE TABLE IF NOT EXISTS batches (
@@ -25,10 +24,10 @@ CREATE TABLE IF NOT EXISTS batches (
 
 CREATE TABLE IF NOT EXISTS remakes (
     remake_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    equipment_nm VARCHAR(64),
-    description VARCHAR(255),
+    equipment_nm VARCHAR(64) NOT NULL,
+    description VARCHAR(255) NOT NULL,
     applicant_id INT REFERENCES employees(tg_id),
-    remake_status VARCHAR(64),
+    remake_status VARCHAR(64) NOT NULL,
     request_dttm TIMESTAMP,
     remake_end_dttm TIMESTAMP
 );

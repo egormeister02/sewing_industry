@@ -2,7 +2,7 @@ from aiogram import Router, types
 from aiogram.fsm.context import FSMContext
 from aiogram.types import BufferedInputFile
 from io import BytesIO
-from app.states import CutterStates, RemakeRequest
+from app.states import CutterStates
 from app.keyboards.inline import cutter_menu, cancel_button_cutter
 from app.services import generate_qr_code
 from app import db
@@ -168,3 +168,4 @@ async def process_parts_count(message: types.Message, state: FSMContext):
         await message.answer(f"Ошибка создания пачки: {str(e)}")
         await state.clear()
         await show_cutter_menu(message)
+

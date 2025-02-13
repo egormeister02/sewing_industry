@@ -2,12 +2,17 @@ from quart import Quart, request, jsonify
 from aiogram import Dispatcher, types
 from aiogram.fsm.storage.memory import MemoryStorage
 import asyncio
+import logging
 from app.handlers import manager, seamstress, cutter, controller, trunk
-from app.database import init_db
-from app.credentials import WEBHOOK_URL
+from app.database import init_db, db
+from app.credentials import WEBHOOK_URL, MANAGERS_ID
 from app.bot import bot
-app = Quart(__name__)
 
+# Настройка логирования
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+app = Quart(__name__)
 storage = MemoryStorage()
 dp = Dispatcher(storage=storage)
 
@@ -18,22 +23,47 @@ dp.include_router(seamstress.router)
 dp.include_router(cutter.router)
 dp.include_router(controller.router)
 
-# Инициализация БД
+# Вместо прямого вызова db.connect()
+async def update_managers_in_db():
+    try:
+        async with db.get_connection() as conn:
+            for manager_id in MANAGERS_ID:
+                try:
+                    async with db.execute(
+                        """INSERT OR REPLACE INTO employees (tg_id, job, name, status) 
+                        VALUES (?, 'manager', 'Менеджер', 'approved')""",
+                        (manager_id,)
+                    ) as cursor:
+                        logger.info(f"Менеджер {manager_id} добавлен/обновлен")
+                except Exception as e:
+                    logger.error(f"Ошибка для менеджера {manager_id}: {str(e)}")
+    except Exception as e:
+        logger.error(f"Критическая ошибка: {str(e)}")
+        raise
+    finally:
+        await db.close()
+
 @app.before_serving
 async def startup():
+    logger.info("Инициализация БД")
     await init_db()
+    
+    logger.info("Обновление менеджеров")
+    await update_managers_in_db()
+    
+    logger.info("Настройка вебхука")
     await bot.delete_webhook()
     await bot.set_webhook(f"{WEBHOOK_URL}/webhook")
 
-# Обработчик вебхука
 @app.route('/webhook', methods=['POST'])
 async def webhook_handler():
-    if request.headers.get('content-type') == 'application/json':
-        update_data = await request.get_json()
-        update = types.Update(**update_data)
-        await dp.feed_update(bot, update)
+    try:
+        update = types.Update(**await request.get_json())
+        asyncio.create_task(dp.feed_update(bot, update))  # Обработка в фоне
         return jsonify({'status': 'ok'})
-    return jsonify({'status': 'invalid content'}), 400
+    except Exception as e:
+        logger.error(f"Webhook error: {str(e)}")
+        return jsonify({'status': 'error'}), 500
 
 if __name__ == '__main__':
     from hypercorn.config import Config
@@ -41,9 +71,13 @@ if __name__ == '__main__':
     
     config = Config()
     config.bind = ["0.0.0.0:8000"]
-    
+    config.loglevel = "info"
+
     async def run():
         await startup()
         await serve(app, config)
     
-    asyncio.run(run())
+    try:
+        asyncio.run(run())
+    except Exception as e:
+        logger.error(f"Ошибка запуска: {str(e)}")

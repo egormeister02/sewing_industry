@@ -1,6 +1,5 @@
 from aiogram import Router, types
 from aiogram.fsm.context import FSMContext
-from aiogram.filters import Command
 from app.services import process_qr_code
 from app.states import SeamstressStates
 from app.keyboards.inline import seamstress_menu, cancel_button_seamstress, seamstress_batch, seamstress_batches_menu
@@ -128,7 +127,7 @@ async def accept_batch(callback: types.CallbackQuery, state: FSMContext):
     try:
         async with db.execute(
             """UPDATE batches 
-            SET seamstress_id = ?, status = 'шьется' 
+            SET seamstress_id = ?, status = 'шьется', sew_start_dttm = CURRENT_TIMESTAMP
             WHERE batch_id = ?""",
             (callback.from_user.id, data['batch_id'])
         ):
