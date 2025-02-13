@@ -11,10 +11,23 @@ router = Router()
 
 @router.message(Command('start'))
 async def cmd_start(message: types.Message):
-    await message.answer(
-        "Выберите вашу должность:",
-        reply_markup=role_keyboard()
-    )
+    # Проверяем есть ли пользователь в базе
+    async with db.execute(
+        "SELECT job FROM employees WHERE tg_id = ?", 
+        (message.from_user.id,)
+    ) as cursor:
+        user = await cursor.fetchone()
+    
+    if user:
+        # Если пользователь есть - получаем его меню
+        menu_function = await get_menu_function(user[0])
+        await menu_function(message)
+    else:
+        # Если нет - предлагаем регистрацию
+        await message.answer(
+            "Выберите вашу должность:",
+            reply_markup=role_keyboard()
+        )
 
 @router.message(Command('testdb'))
 async def test_db(message: types.Message):
