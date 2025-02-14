@@ -119,7 +119,10 @@ async def process_batch_qr(message: types.Message, state: FSMContext):
                 batch_data = await cursor.fetchone()
             
             if not batch_data:
-                raise ValueError("Пачка не найдена или уже взята в работу")
+                await message.answer("❌ Пачка не найдена или уже взята в работу")
+                await state.clear()
+                await show_seamstress_menu(message)
+                return
                 
             await state.update_data(batch_id=batch_id)
             await state.set_state(SeamstressStates.confirm_batch)
@@ -197,6 +200,7 @@ async def show_seamstress_batches(callback: types.CallbackQuery):
         if not batches:
             await callback.message.answer("У вас нет активных пачек")
             await callback.answer()
+            await new_seamstress_menu(callback)
             return
 
         await callback.message.edit_text(
