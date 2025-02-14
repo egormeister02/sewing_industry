@@ -6,6 +6,7 @@ from app.keyboards.inline import seamstress_menu, cancel_button_seamstress, seam
 from app import db
 import traceback
 import logging
+import os
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -93,52 +94,60 @@ async def process_batch_qr(message: types.Message, state: FSMContext):
         image_data = await message.bot.download_file(file.file_path)
         
         temp_filename = f"temp_qr_{message.from_user.id}_{message.message_id}.jpg"
-        with open(temp_filename, "wb") as f:
-            f.write(image_data.getvalue())
-
-        # Декодируем QR
         try:
-            qr_text = await process_qr_code(image_data.read())
-            print(f"Decoded QR: {qr_text}")
-        except Exception as decode_error:
-            await message.answer("❌ Не удалось прочитать QR-код. Убедитесь что:")
-            await message.answer("- Фото хорошо освещено\n- QR-код в фокусе\n- Нет бликов")
-            raise decode_error
-        
-        batch_id = int(qr_text.split('ID:')[1].split('\n')[0].strip())
-        
-        # Ищем пачку в БД
-        async with db.execute(
-            """SELECT batch_id, project_nm, product_nm, color, size, quantity, parts_count 
-            FROM batches 
-            WHERE batch_id = ? AND seamstress_id IS NULL""",
-            (batch_id,)
-        ) as cursor:
-            batch_data = await cursor.fetchone()
-        
-        if not batch_data:
-            raise ValueError("Пачка не найдена или уже взята в работу")
+            with open(temp_filename, "wb") as f:
+                f.write(image_data.getvalue())
+
+            # Декодируем QR
+            try:
+                qr_text = await process_qr_code(image_data.read())
+                print(f"Decoded QR: {qr_text}")
+            except Exception as decode_error:
+                await message.answer("❌ Не удалось прочитать QR-код. Убедитесь что:")
+                await message.answer("- Фото хорошо освещено\n- QR-код в фокусе\n- Нет бликов")
+                raise decode_error
             
-        await state.update_data(batch_id=batch_id)
-        await state.set_state(SeamstressStates.confirm_batch)
-        
-        # Формируем сообщение с данными
-        response = (
-            "🔍 Найдена пачка:\n\n"
-            f"ID: {batch_data[0]}\n"
-            f"Проект: {batch_data[1]}\n"
-            f"Изделие: {batch_data[2]}\n"
-            f"Цвет: {batch_data[3]}\n"
-            f"Размер: {batch_data[4]}\n"
-            f"Количество: {batch_data[5]}\n"
-            f"Деталей: {batch_data[6]}\n\n"
-            "Принять пачку в работу?"
-        )
-        
-        await message.answer(
-            response,
-            reply_markup=seamstress_batch()
-        )
+            batch_id = int(qr_text.split('ID:')[1].split('\n')[0].strip())
+            
+            # Ищем пачку в БД
+            async with db.execute(
+                """SELECT batch_id, project_nm, product_nm, color, size, quantity, parts_count 
+                FROM batches 
+                WHERE batch_id = ? AND seamstress_id IS NULL""",
+                (batch_id,)
+            ) as cursor:
+                batch_data = await cursor.fetchone()
+            
+            if not batch_data:
+                raise ValueError("Пачка не найдена или уже взята в работу")
+                
+            await state.update_data(batch_id=batch_id)
+            await state.set_state(SeamstressStates.confirm_batch)
+            
+            # Формируем сообщение с данными
+            response = (
+                "🔍 Найдена пачка:\n\n"
+                f"ID: {batch_data[0]}\n"
+                f"Проект: {batch_data[1]}\n"
+                f"Изделие: {batch_data[2]}\n"
+                f"Цвет: {batch_data[3]}\n"
+                f"Размер: {batch_data[4]}\n"
+                f"Количество: {batch_data[5]}\n"
+                f"Деталей: {batch_data[6]}\n\n"
+                "Принять пачку в работу?"
+            )
+            
+            await message.answer(
+                response,
+                reply_markup=seamstress_batch()
+            )
+            
+        finally:
+            # Удаляем временный файл в любом случае
+            try:
+                os.remove(temp_filename)
+            except OSError:
+                pass
         
     except Exception as e:
         logger.error("QR processing failed: %s", traceback.format_exc())
