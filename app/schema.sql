@@ -19,7 +19,8 @@ CREATE TABLE IF NOT EXISTS batches (
     status VARCHAR(64),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     sew_start_dttm TIMESTAMP,
-    sew_end_dttm TIMESTAMP
+    sew_end_dttm TIMESTAMP,
+    verified_dttm TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS remakes (

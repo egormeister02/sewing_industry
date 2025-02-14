@@ -9,6 +9,12 @@ from app.bot import bot
 from app import db
 
 router = Router()
+
+async def delete_message_reply_markup(message: types.Message):
+    await bot.edit_message_reply_markup(
+            chat_id=message.chat.id,
+            message_id=message.message_id - 1,
+            reply_markup=None)
 '''
 @router.message(Command('start'))
 async def cmd_start(message: types.Message):
@@ -18,11 +24,7 @@ async def cmd_start(message: types.Message):
     )
 
 '''
-async def delete_message_reply_markup(message: types.Message):
-    await bot.edit_message_reply_markup(
-            chat_id=message.chat.id,
-            message_id=message.message_id - 1,
-            reply_markup=None)
+
     
 @router.message(Command('start'))
 async def cmd_start(message: types.Message):
@@ -71,7 +73,7 @@ async def process_registration_name(message: types.Message, state: FSMContext):
 
         async with db.execute(
             """INSERT INTO employees (name, job, tg_id, status)
-            VALUES (?, ?, ?, 'pending')""",
+            VALUES (?, ?, ?, 'approved')""",   # на время разработки статус approved
             (data['name'], data['job'], user_id)
         ) as cursor:
             await db.fetchall(cursor)
@@ -101,7 +103,9 @@ async def process_registration_name(message: types.Message, state: FSMContext):
 @router.callback_query(lambda c: c.data.startswith('approve_user_'))
 async def approve_user(callback: types.CallbackQuery):
     try:
+        await callback.answer()
         user_id = int(callback.data.split('_')[-1])
+        
         # Обновляем статус пользователя
         async with db.execute(
             "UPDATE employees SET status = 'approved' WHERE tg_id = ?",
@@ -129,7 +133,7 @@ async def approve_user(callback: types.CallbackQuery):
             )
 
     except Exception as e:
-        await callback.answer(f"Ошибка: {str(e)}")
+        await callback.answer(f"Ошибка: {str(e)}", show_alert=True)
     finally:
         await callback.answer()
 
@@ -147,13 +151,10 @@ async def reject_user(callback: types.CallbackQuery):
 
         # Обновляем сообщение у менеджера
         await callback.message.edit_reply_markup(reply_markup=None)
-        await callback.message.edit_text(
+        await callback.message.answer(
             f"❌ Пользователь {user_id} отклонен",
-            reply_markup=None
+            reply_markup=manager_menu()
         )
-        
-        # Показываем меню менеджера
-        await manager.show_manager_menu(callback)
 
         # Уведомляем пользователя
         await bot.send_message(

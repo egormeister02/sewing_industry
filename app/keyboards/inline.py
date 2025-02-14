@@ -48,6 +48,12 @@ def seamstress_batches_menu(batches):
     buttons.append([InlineKeyboardButton(text="OK", callback_data="seamstress_ok")])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
+def seamstress_finish_batch():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✅ Завершить", callback_data="seamstress_finish_batch"),
+         InlineKeyboardButton(text="Отмена", callback_data="seamstress_cancel_finish_batch")]
+    ])
+
 def cutter_menu():
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="Мои данные", callback_data="cutter_data")],

@@ -74,12 +74,24 @@ async def create_batch_start(callback: types.CallbackQuery, state: FSMContext):
     )
 @router.message(CutterStates.waiting_for_project_name)
 async def process_project_name(message: types.Message, state: FSMContext):
-    await delete_message_reply_markup(message)
+    try:
+        await delete_message_reply_markup(message)
+    except Exception as e:
+        print(f"Ошибка при удалении клавиатуры: {str(e)}")
+
     await state.update_data(project_name=message.text)
     await state.set_state(CutterStates.waiting_for_product_name)
-    await message.answer("Введите название изделия:",
-        reply_markup=cancel_button_cutter()
-    )
+    try:
+        await message.answer(
+            "Введите название изделия:",
+            reply_markup=cancel_button_cutter()
+        )
+    except Exception as e:
+        await message.answer(
+            "Произошла ошибка. Попробуйте еще раз:",
+            reply_markup=cancel_button_cutter()
+        )
+        await state.set_state(CutterStates.waiting_for_project_name)
 
 @router.message(CutterStates.waiting_for_product_name)
 async def process_product_name(message: types.Message, state: FSMContext):
