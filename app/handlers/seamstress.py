@@ -34,7 +34,7 @@ async def new_seamstress_menu(callback: types.CallbackQuery):
 async def cancel_creation(callback: types.CallbackQuery, state: FSMContext):
     await state.clear()
     await callback.message.edit_text(
-        "Создание отменено",
+        "Действие отменено",
         reply_markup=seamstress_menu()
     )
     await callback.answer()
@@ -111,9 +111,9 @@ async def process_batch_qr(message: types.Message, state: FSMContext):
         
         # Ищем пачку в БД
         async with db.execute(
-            """SELECT batch_id, project_nm, product_nm, color, size, quantity, parts_count 
+            """SELECT batch_id, project_nm, product_nm, color, size, quantity, parts_count, status, seamstress_id
             FROM batches 
-            WHERE batch_id = ? AND seamstress_id IS NULL""",
+            WHERE batch_id = ? AND (status = 'создана' or status = 'брак на переделке')""",
             (batch_id,)
         ) as cursor:
             batch_data = await cursor.fetchone()
@@ -123,13 +123,18 @@ async def process_batch_qr(message: types.Message, state: FSMContext):
             await state.clear()
             await show_seamstress_menu(message)
             return
+        
+        if batch_data[7] == 'брак на переделке' and batch_data[8] != message.from_user.id:
+            await message.answer("❌ Пачка на переделке не может быть взята в работу другой швеей")
+            await state.clear()
+            await show_seamstress_menu(message)
+            return
             
-        await state.update_data(batch_id=batch_id)
+        await state.update_data(batch_data=batch_data)
         await state.set_state(SeamstressStates.confirm_batch)
         
         # Формируем сообщение с данными
         response = (
-            "🔍 Найдена пачка:\n\n"
             f"ID: {batch_data[0]}\n"
             f"Проект: {batch_data[1]}\n"
             f"Изделие: {batch_data[2]}\n"
@@ -139,8 +144,9 @@ async def process_batch_qr(message: types.Message, state: FSMContext):
             f"Деталей: {batch_data[6]}\n\n"
             "Принять пачку в работу?"
         )
-        
-        await message.answer(
+        if batch_data[7] == 'брак на переделке':
+            response = "🔄 Это ваша пачка на переделке\n\n" + response
+        await message.answer( 
             response,
             reply_markup=seamstress_batch()
         )
@@ -154,11 +160,16 @@ async def process_batch_qr(message: types.Message, state: FSMContext):
 async def accept_batch(callback: types.CallbackQuery, state: FSMContext):
     data = await state.get_data()
     try:
+        new_status = 'шьется'
+
+        if data['batch_data'][7] == 'брак на переделке':
+            new_status = 'переделка начата'
+        
         async with db.execute(
             """UPDATE batches 
-            SET seamstress_id = ?, status = 'шьется', sew_start_dttm = CURRENT_TIMESTAMP
+            SET seamstress_id = ?, status = ?, sew_start_dttm = CURRENT_TIMESTAMP
             WHERE batch_id = ?""",
-            (callback.from_user.id, data['batch_id'])
+            (callback.from_user.id, new_status, data['batch_data'][0])
         ):
             await callback.message.edit_text("✅ Пачка успешно принята в работу!")
             await state.clear()
@@ -183,9 +194,9 @@ async def show_seamstress_batches(callback: types.CallbackQuery):
         
         # Получаем все пачки швеи
         async with db.execute(
-            """SELECT batch_id, project_nm, product_nm, status 
+            """SELECT batch_id, status 
             FROM batches 
-            WHERE seamstress_id = ? and batches.status = 'шьется'""",
+            WHERE seamstress_id = ? and (batches.status = 'шьется' or batches.status = 'брак на переделке' or batches.status = 'переделка начата')""",
             (user_id,)
         ) as cursor:
             batches = await cursor.fetchall()
@@ -210,11 +221,11 @@ async def show_seamstress_batches(callback: types.CallbackQuery):
 async def show_batch_details(callback: types.CallbackQuery, state: FSMContext):
     try:
         batch_id = int(callback.data.split('_')[-1])
-        await state.update_data(batch_id=batch_id)
+        
         
         async with db.execute(
             """SELECT batches.batch_id, batches.project_nm, batches.product_nm, batches.color, batches.size, 
-                    batches.quantity, batches.parts_count, batches.seamstress_id, batches.created_at,
+                    batches.quantity, batches.parts_count, batches.seamstress_id, batches.created_at, batches.status,
                     employees.name 
             FROM batches 
             JOIN employees ON batches.cutter_id = employees.tg_id
@@ -222,7 +233,8 @@ async def show_batch_details(callback: types.CallbackQuery, state: FSMContext):
             (batch_id,)
         ) as cursor:
             batch_data = await cursor.fetchone()
-        
+
+        await state.update_data(batch_data=batch_data)
         if not batch_data:
             await callback.answer("Пачка не найдена")
             return
@@ -236,13 +248,22 @@ async def show_batch_details(callback: types.CallbackQuery, state: FSMContext):
             f"Размер: {batch_data[4]}\n"
             f"Количество: {batch_data[5]}\n"
             f"Деталей: {batch_data[6]}\n"
-            f"Раскройщик: {batch_data[9]}\n"
-            f"Дата создания: {batch_data[8]}"
+            f"Раскройщик: {batch_data[10]}\n"
+            f"Дата создания: {batch_data[8]}\n"
+            f"Статус: {batch_data[9]}\n"
         )
-        
-        await callback.message.edit_text(
-            response,
-            reply_markup=seamstress_finish_batch())
+        if batch_data[9] == 'брак на переделке':
+            response = "🔄 Пачка отправлена на переделку\n\n" + response + "\n\n📤 Отправьте QR-код пачки для начала работы"
+            await state.set_state(SeamstressStates.waiting_for_qr)
+            await callback.message.edit_text(response, reply_markup=cancel_button_seamstress())
+            
+        elif batch_data[9] == 'переделка начата':
+            response = "🔄 Пачка на переделке\n\n" + response
+            await callback.message.edit_text(response, reply_markup=seamstress_finish_batch())
+        else:
+            await callback.message.edit_text(
+                response,
+                reply_markup=seamstress_finish_batch())
         
     except Exception as e:
         await callback.message.answer(f"Ошибка: {str(e)}")
@@ -253,17 +274,21 @@ async def show_batch_details(callback: types.CallbackQuery, state: FSMContext):
 async def finish_batch_handler(callback: types.CallbackQuery, state: FSMContext):
     try:
         data = await state.get_data()
-        batch_id = data.get('batch_id')
+        batch_id = data.get('batch_data')[0]
         
         if not batch_id:
             await callback.answer("Ошибка: ID пачки не найден")
             return
-            
+        new_status = 'пошита'
+
+        if data.get('batch_data')[9] == 'переделка начата':
+            new_status = 'переделка завершена'
+
         async with db.execute(
             """UPDATE batches 
-            SET status = 'пошита', sew_end_dttm = CURRENT_TIMESTAMP 
+            SET status = ?, sew_end_dttm = CURRENT_TIMESTAMP 
             WHERE batch_id = ?""",
-            (batch_id,)
+            (new_status, batch_id)
         ) as cursor:
             await db.fetchall(cursor)
             

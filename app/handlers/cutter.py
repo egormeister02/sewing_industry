@@ -149,7 +149,7 @@ async def process_parts_count(message: types.Message, state: FSMContext):
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             RETURNING batch_id""",
             (data['project_name'], data['product_name'], data['color'], 
-             data['size'], data['quantity'], parts_count, message.from_user.id, 'created')
+             data['size'], data['quantity'], parts_count, message.from_user.id, 'создана')
         ) as cursor:
             result = await cursor.fetchone()
             if not result or not result[0]:

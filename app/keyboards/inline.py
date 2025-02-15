@@ -66,8 +66,20 @@ def controller_menu():
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="Мои данные", callback_data="controller_data")],
         [InlineKeyboardButton(text="Мои выплаты", callback_data="controller_payments")],
-        [InlineKeyboardButton(text="Проверка качества", callback_data="controller_quality_check")],
-        [InlineKeyboardButton(text="Статистика брака", callback_data="controller_defect_stats")],
+        [InlineKeyboardButton(text="Проверка пачки", callback_data="controller_take_batch")],
+        [InlineKeyboardButton(text="Заявка на ремонт", callback_data="repair")],
+    ])
+
+def controller_batch_decision():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="✅ Готово", callback_data="batch_approve"),
+            InlineKeyboardButton(text="❌ Брак", callback_data="batch_reject")
+        ],
+        [
+            InlineKeyboardButton(text="🔄 На переделку", callback_data="batch_remake"),
+            InlineKeyboardButton(text="⏪ Отмена", callback_data="cancel_control")
+        ]
     ])
 
 def cancel_button_manager():

@@ -1,4 +1,4 @@
 #from .handlers import register_handlers
 from .database import db
-
-__all__ = ["db"]
+from app.bot import bot
+__all__ = ["db", "bot"]
