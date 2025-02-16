@@ -91,8 +91,9 @@ async def process_registration_name(message: types.Message, state: FSMContext):
                      f"Подтвердить регистрацию?",
                 reply_markup=approval_keyboard(user_id)
             )
-
-        await message.answer("✅ Заявка отправлена менеджеру. Ожидайте подтверждения.")
+        menu_func = await get_menu_function(data['job'])
+        await message.answer("✅ Заявка отправлена менеджеру. Ожидайте подтверждения.",
+                              reply_markup=menu_func())      # на время разработки показывается меню должности
         await state.clear()
 
     except Exception as e:
@@ -231,7 +232,7 @@ async def process_remake_description(message: types.Message, state: FSMContext):
         
         async with db.execute(
             """INSERT INTO remakes 
-            (equipment_nm, description, applicant_id, remake_status)
+            (equipment_nm, description, applicant_id, status)
             VALUES (?, ?, ?, 'создана')""",
             (data['equipment'], safe_description, message.from_user.id)
         ) as cursor:

@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS remakes (
     equipment_nm VARCHAR(64) NOT NULL,
     description VARCHAR(255) NOT NULL,
     applicant_id INT REFERENCES employees(tg_id),
-    remake_status VARCHAR(64) NOT NULL,
+    status VARCHAR(64) NOT NULL CHECK(status IN ('создана', 'в работе', 'завершена')),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     remake_end_dttm TIMESTAMP
 );

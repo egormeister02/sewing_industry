@@ -7,7 +7,7 @@ from app.handlers import manager, seamstress, cutter, controller, trunk
 from app.database import init_db, db
 from app.credentials import WEBHOOK_URL, MANAGERS_ID
 from app.bot import bot
-
+from app.services import GoogleSheetsManager
 # Настройка логирования
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -54,6 +54,13 @@ async def startup():
     logger.info("Настройка вебхука")
     await bot.delete_webhook()
     await bot.set_webhook(f"{WEBHOOK_URL}/webhook")
+
+    logger.info("Настройка Google Sheets")
+    sheets = GoogleSheetsManager()
+    async with db.execute("SELECT name FROM sqlite_master WHERE type='table'") as cursor:
+        tables = [row[0] for row in await cursor.fetchall()]
+        for table in tables:
+            await sheets.initialize_sheet(table)
 
 @app.route('/webhook', methods=['POST'])
 async def webhook_handler():

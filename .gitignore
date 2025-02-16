@@ -1,4 +1,5 @@
 credentials.py
+credentials.json
 venv
 __pycache__
 database/*
