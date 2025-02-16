@@ -57,10 +57,11 @@ async def startup():
 
     logger.info("Настройка Google Sheets")
     sheets = GoogleSheetsManager()
-    async with db.execute("SELECT name FROM sqlite_master WHERE type='table'") as cursor:
+    async with db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'") as cursor:
         tables = [row[0] for row in await cursor.fetchall()]
         for table in tables:
             await sheets.initialize_sheet(table)
+    await sheets.full_sync()
 
 @app.route('/webhook', methods=['POST'])
 async def webhook_handler():

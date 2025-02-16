@@ -372,24 +372,22 @@ class GoogleSheetsManager:
         constraints = await self._get_column_constraints(table_name)
         await self._apply_data_validation(table_name, constraints)
 
-        async def full_sync(self) -> Dict[str, str]:
-            """Полная синхронизация всех таблиц"""
-            results = {}
-            async with db.execute("""SELECT name FROM sqlite_master 
-                            WHERE type='table' AND name NOT LIKE 'sqlite_%'""") as cursor:
-                tables = [row[0] for row in await cursor.fetchall()]
+    async def full_sync(self) -> Dict[str, str]:
+        """Полная синхронизация всех таблиц"""
+        results = {}
+        async with db.execute("""SELECT name FROM sqlite_master 
+                        WHERE type='table' AND name NOT LIKE 'sqlite_%'""") as cursor:
+            tables = [row[0] for row in await cursor.fetchall()]
 
-
-            for table in tables:
-                try:
-                    await self.ensure_sheet_exists(table)
-                    await self.sync_table_to_sheet(table)
-                    results[table] = 'OK'
-                except Exception as e:
-                    results[table] = f"Error: {str(e)}"
-                    logger.error(f"Sync failed for {table}: {e}")
-
-            return results
+        for table in tables:
+            try:
+                await self.ensure_sheet_exists(table)
+                await self.sync_data_to_sheet(table)
+                results[table] = 'OK'
+            except Exception as e:
+                results[table] = f"Error: {str(e)}"
+                logger.error(f"Sync failed for {table}: {e}")
+        return results
 
     async def _get_sheet_id(self, sheet_name: str) -> int:
         """Получение ID листа по названию"""
