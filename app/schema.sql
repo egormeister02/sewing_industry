@@ -1,8 +1,8 @@
 CREATE TABLE IF NOT EXISTS employees (
     tg_id INT PRIMARY KEY,
     name VARCHAR(64) NOT NULL,
-    job VARCHAR(64) NOT NULL CHECK(job IN ('manager', 'seamstress', 'cutter', 'controller')),
-    status VARCHAR(64) NOT NULL CHECK(status IN ('approved', 'pending'))
+    job VARCHAR(64) NOT NULL CHECK(job IN ('менеджер', 'швея', 'раскройщик', 'контролер ОТК')),
+    status VARCHAR(64) NOT NULL CHECK(status IN ('одобрено', 'ожидает подтверждения'))
 );
 
 CREATE TABLE IF NOT EXISTS batches (

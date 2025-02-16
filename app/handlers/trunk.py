@@ -170,10 +170,10 @@ async def reject_user(callback: types.CallbackQuery):
 
 async def get_menu_function(job: str):
     menu_keyboards = {
-        'manager': manager_menu,
-        'seamstress': seamstress_menu,
-        'cutter': cutter_menu,
-        'controller': controller_menu
+        'менеджер': manager_menu,
+        'швея': seamstress_menu,
+        'раскройщик': cutter_menu,
+        'контролер ОТК': controller_menu
     }
     return menu_keyboards.get(job)
 
