@@ -43,7 +43,8 @@ async def update_managers_in_db():
 
 @app.before_serving
 async def startup():
-    await init_db()
+    db_instance = await init_db()  # Получаем инициализированный экземпляр БД
+    app.db = db_instance  # Сохраняем в контексте приложения
     
     logger.info("Обновление менеджеров")
     await update_managers_in_db()
@@ -53,7 +54,9 @@ async def startup():
     await bot.set_webhook(f"{WEBHOOK_URL}/webhook")
 
     logger.info("Настройка Google Sheets")
-    async with db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'") as cursor:
+    async with db.execute("""SELECT name FROM sqlite_master WHERE type='table'
+                           AND name NOT LIKE 'sqlite_%' 
+                           AND name NOT LIKE '%_audit'""") as cursor:
         tables = [row[0] for row in await cursor.fetchall()]
         for table in tables:
             await db.sheets.initialize_sheet(table)

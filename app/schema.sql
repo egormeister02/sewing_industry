@@ -67,6 +67,10 @@ CREATE TABLE IF NOT EXISTS batches_audit (
     seamstress_id INT,
     controller_id INT,
     status VARCHAR(64),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    sew_start_dttm TIMESTAMP,
+    sew_end_dttm TIMESTAMP,
+    control_dttm TIMESTAMP,
     action_type VARCHAR(10) NOT NULL CHECK(action_type IN ('INSERT', 'UPDATE', 'DELETE')),
     action_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -78,6 +82,8 @@ CREATE TABLE IF NOT EXISTS remakes_audit (
     description VARCHAR(255),
     applicant_id INT,
     status VARCHAR(64),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    remake_end_dttm TIMESTAMP,
     action_type VARCHAR(10) NOT NULL CHECK(action_type IN ('INSERT', 'UPDATE', 'DELETE')),
     action_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -106,43 +112,43 @@ END;
 CREATE TRIGGER IF NOT EXISTS log_batch_insert
 AFTER INSERT ON batches
 BEGIN
-    INSERT INTO batches_audit (batch_id, project_nm, product_nm, color, size, quantity, parts_count, cutter_id, seamstress_id, controller_id, status, action_type)
-    VALUES (NEW.batch_id, NEW.project_nm, NEW.product_nm, NEW.color, NEW.size, NEW.quantity, NEW.parts_count, NEW.cutter_id, NEW.seamstress_id, NEW.controller_id, NEW.status, 'INSERT');
+    INSERT INTO batches_audit (batch_id, project_nm, product_nm, color, size, quantity, parts_count, cutter_id, seamstress_id, controller_id, status, created_at, sew_start_dttm, sew_end_dttm, control_dttm, action_type)
+    VALUES (NEW.batch_id, NEW.project_nm, NEW.product_nm, NEW.color, NEW.size, NEW.quantity, NEW.parts_count, NEW.cutter_id, NEW.seamstress_id, NEW.controller_id, NEW.status, NEW.created_at, NEW.sew_start_dttm, NEW.sew_end_dttm, NEW.control_dttm, 'INSERT');
 END;
 
 CREATE TRIGGER IF NOT EXISTS log_batch_update
 AFTER UPDATE ON batches
 BEGIN
-    INSERT INTO batches_audit (batch_id, project_nm, product_nm, color, size, quantity, parts_count, cutter_id, seamstress_id, controller_id, status, action_type)
-    VALUES (NEW.batch_id, NEW.project_nm, NEW.product_nm, NEW.color, NEW.size, NEW.quantity, NEW.parts_count, NEW.cutter_id, NEW.seamstress_id, NEW.controller_id, NEW.status, 'UPDATE');
+    INSERT INTO batches_audit (batch_id, project_nm, product_nm, color, size, quantity, parts_count, cutter_id, seamstress_id, controller_id, status, created_at, sew_start_dttm, sew_end_dttm, control_dttm, action_type)
+    VALUES (NEW.batch_id, NEW.project_nm, NEW.product_nm, NEW.color, NEW.size, NEW.quantity, NEW.parts_count, NEW.cutter_id, NEW.seamstress_id, NEW.controller_id, NEW.status, NEW.created_at, NEW.sew_start_dttm, NEW.sew_end_dttm, NEW.control_dttm, 'UPDATE');
 END;
 
 CREATE TRIGGER IF NOT EXISTS log_batch_delete
 AFTER DELETE ON batches
 BEGIN
-    INSERT INTO batches_audit (batch_id, project_nm, product_nm, color, size, quantity, parts_count, cutter_id, seamstress_id, controller_id, status, action_type)
-    VALUES (OLD.batch_id, OLD.project_nm, OLD.product_nm, OLD.color, OLD.size, OLD.quantity, OLD.parts_count, OLD.cutter_id, OLD.seamstress_id, OLD.controller_id, OLD.status, 'DELETE');
+    INSERT INTO batches_audit (batch_id, project_nm, product_nm, color, size, quantity, parts_count, cutter_id, seamstress_id, controller_id, status, created_at, sew_start_dttm, sew_end_dttm, control_dttm, action_type)
+    VALUES (OLD.batch_id, OLD.project_nm, OLD.product_nm, OLD.color, OLD.size, OLD.quantity, OLD.parts_count, OLD.cutter_id, OLD.seamstress_id, OLD.controller_id, OLD.status, OLD.created_at, OLD.sew_start_dttm, OLD.sew_end_dttm, OLD.control_dttm, 'DELETE');
 END;
 
 CREATE TRIGGER IF NOT EXISTS log_remake_insert
 AFTER INSERT ON remakes
 BEGIN
-    INSERT INTO remakes_audit (remake_id, equipment_nm, description, applicant_id, status, action_type)
-    VALUES (NEW.remake_id, NEW.equipment_nm, NEW.description, NEW.applicant_id, NEW.status, 'INSERT');
+    INSERT INTO remakes_audit (remake_id, equipment_nm, description, applicant_id, status, created_at, remake_end_dttm, action_type)
+    VALUES (NEW.remake_id, NEW.equipment_nm, NEW.description, NEW.applicant_id, NEW.status, NEW.created_at, NEW.remake_end_dttm, 'INSERT');
 END;
 
 CREATE TRIGGER IF NOT EXISTS log_remake_update
 AFTER UPDATE ON remakes
 BEGIN
-    INSERT INTO remakes_audit (remake_id, equipment_nm, description, applicant_id, status, action_type)
-    VALUES (NEW.remake_id, NEW.equipment_nm, NEW.description, NEW.applicant_id, NEW.status, 'UPDATE');
+    INSERT INTO remakes_audit (remake_id, equipment_nm, description, applicant_id, status, created_at, remake_end_dttm, action_type)
+    VALUES (NEW.remake_id, NEW.equipment_nm, NEW.description, NEW.applicant_id, NEW.status, NEW.created_at, NEW.remake_end_dttm, 'UPDATE');
 END;
 
 CREATE TRIGGER IF NOT EXISTS log_remake_delete
 AFTER DELETE ON remakes
 BEGIN
-    INSERT INTO remakes_audit (remake_id, equipment_nm, description, applicant_id, status, action_type)
-    VALUES (OLD.remake_id, OLD.equipment_nm, OLD.description, OLD.applicant_id, OLD.status, 'DELETE');
+    INSERT INTO remakes_audit (remake_id, equipment_nm, description, applicant_id, status, created_at, remake_end_dttm, action_type)
+    VALUES (OLD.remake_id, OLD.equipment_nm, OLD.description, OLD.applicant_id, OLD.status, OLD.created_at, OLD.remake_end_dttm, 'DELETE');
 END;
 
 

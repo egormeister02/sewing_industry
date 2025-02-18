@@ -434,7 +434,9 @@ class GoogleSheetsManager:
         """Полная синхронизация всех таблиц"""
         results = {}
         async with self.db.execute("""SELECT name FROM sqlite_master 
-                        WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '%_audit'""") as cursor:
+                        WHERE type='table' 
+                        AND name NOT LIKE 'sqlite_%' 
+                        AND name NOT LIKE '%_audit'""") as cursor:
             tables = [row[0] for row in await cursor.fetchall()]
 
         for table in tables:

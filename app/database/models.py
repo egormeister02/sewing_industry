@@ -1,5 +1,5 @@
+import apsw
 from threading import Thread
-import sqlite3
 import logging
 import aiosqlite
 from contextlib import asynccontextmanager
@@ -13,84 +13,60 @@ logger = logging.getLogger(__name__)
 class Database:
     def __init__(self):
         self.conn = None
-        self.audit_thread = None
-        self.sheets = GoogleSheetsManager(db_instance=self)  # Передаем текущий экземпляр БД  # Инициализируем позже
+        self.sheets = GoogleSheetsManager(db_instance=self)
+        # УДАЛЕНО: asyncio.create_task(self._audit_polling_loop())
+        self._polling_task = None  # Добавляем атрибут для хранения задачи
 
+    async def start_polling(self):
+        """Запускаем polling loop после инициализации приложения"""
+        if not self._polling_task:
+            self._polling_task = asyncio.create_task(self._audit_polling_loop())
 
-    def _start_audit_thread(self):
-        def audit_worker():
-            sync_conn = None
+    async def _audit_polling_loop(self):
+        """Фоновая задача для периодической проверки аудит-таблиц"""
+        while True:
             try:
-                sync_conn = sqlite3.connect(DB_PATH, check_same_thread=False)
-                sync_conn.execute("PRAGMA foreign_keys = ON")
-                
-                def update_handler(op_type, db_name, table_name, row_id):
-                    """Обработчик изменений с проверкой соединения"""
-                    if not table_name.endswith('_audit'):
-                        return
-                    
-                    try:
-                        # Получаем реальный audit_id
-                        cur = sync_conn.execute(
-                            f"SELECT audit_id FROM {table_name} WHERE rowid = ?",
-                            (row_id,)
-                        )
-                        audit_id = cur.fetchone()[0]
-                        
-                        # Запускаем обработку в отдельном потоке
-                        Thread(
-                            target=asyncio.run,
-                            args=(self._process_audit_change(table_name, audit_id),)
-                        ).start()
-                        
-                    except Exception as e:
-                        logger.error(f"Update handler error: {str(e)}")
+                # Получаем список всех аудит-таблиц
+                async with self.execute(
+                    "SELECT name FROM sqlite_master "
+                    "WHERE type='table' AND name LIKE '%_audit'"
+                ) as cursor:
+                    audit_tables = [row['name'] for row in await self.fetchall(cursor)]
 
-                # Устанавливаем хук после инициализации соединения
-                sync_conn.set_update_hook(update_handler)
-                
-                # Бесконечный цикл с обработкой ошибок
-                while True:
-                    try:
-                        # Поддерживаем соединение активным
-                        sync_conn.execute("SELECT 1 FROM sqlite_master LIMIT 1").fetchone()
-                        time.sleep(1)  # Задержка для снижения нагрузки
-                    except sqlite3.ProgrammingError as e:
-                        logger.error(f"Connection lost: {str(e)}")
-                        break
-                    except Exception as e:
-                        logger.error(f"Audit worker error: {str(e)}")
-                        time.sleep(5)
+                # Проверяем каждую таблицу на наличие записей
+                for table_name in audit_tables:
+                    async with self.execute(
+                        f"SELECT COUNT(*) as count FROM {table_name}"
+                    ) as cursor:
+                        count = (await self.fetchall(cursor))[0]['count']
+                    
+                    if count > 0:
+                        await self._process_audit_change(table_name)
+
+                await asyncio.sleep(1)  # Проверка каждые 5 секунд
 
             except Exception as e:
-                logger.error(f"Audit worker failed: {str(e)}")
-            finally:
-                if sync_conn:
-                    try:
-                        sync_conn.close()
-                    except Exception as e:
-                        logger.error(f"Error closing connection: {str(e)}")
+                logger.error(f"Ошибка в polling loop: {str(e)}", exc_info=True)
+                await asyncio.sleep(5)
 
-        self.audit_thread = Thread(target=audit_worker, daemon=True)
-        self.audit_thread.start()
-
-    async def _process_audit_change(self, table_name, row_id):
+    async def _process_audit_change(self, table_name):
         try:
             main_table = table_name.rsplit('_audit', 1)[0]
             
             # Сначала получаем данные ДО удаления
             async with self.execute(f"SELECT * FROM {table_name}") as cursor:
                 audit_rows = await self.fetchall(cursor)
-                audit_ids = [row['audit_id'] for row in audit_rows]  # Получаем ID после выборки
+                audit_ids = [row['audit_id'] for row in audit_rows]
 
             # Затем удаляем записи
             if audit_ids:
+                
                 async with self.execute(
                     f"DELETE FROM {table_name} WHERE audit_id IN ({','.join(['?']*len(audit_ids))})",
                     audit_ids
                 ) as cursor:
-                    await cursor.execute()  # Нужно явно выполнить запрос
-
+                    pass
+        
                 # Обрабатываем полученные данные
                 for audit_row in audit_rows:
                     action_type = audit_row['action_type']
@@ -102,20 +78,21 @@ class Database:
 
         except Exception as e:
             logger.error(f"Audit processing error: {str(e)}")
-            raise  # Важно пробросить исключение дальше
+            raise
 
     @asynccontextmanager
     async def get_connection(self):
         """Асинхронный контекстный менеджер для подключения"""
         if not self.conn:
             self.conn = await aiosqlite.connect(DB_PATH)
+            # Включаем доступ к колонкам по имени
+            self.conn.row_factory = aiosqlite.Row
             await self.conn.execute("PRAGMA foreign_keys = ON")
             logger.info("Database connection opened")
         
         try:
             yield self.conn
         finally:
-            # Не закрываем соединение явно, будем использовать одно подключение
             pass
 
     async def close(self):
@@ -139,12 +116,12 @@ class Database:
                 raise
 
     async def fetchall(self, cursor):
-        return await cursor.fetchall()
+        # Преобразуем строки в словари
+        return [dict(row) for row in await cursor.fetchall()]
 
 async def init_db():
     """Инициализация структуры БД"""
     db = Database()
-    db._start_audit_thread()
     try:
         async with db.get_connection() as conn:
             with open('app/schema.sql', 'r') as f:
@@ -152,8 +129,11 @@ async def init_db():
             await conn.executescript(schema)
             await conn.commit()
             logger.info("Database schema initialized")
+        
+        # Запускаем polling после инициализации
+        await db.start_polling()
+        return db  # Возвращаем экземпляр базы данных
+        
     except Exception as e:
         logger.error(f"Error initializing DB: {str(e)}")
         raise
-    finally:
-        await db.close()
