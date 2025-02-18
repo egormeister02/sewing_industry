@@ -65,7 +65,7 @@ class Database:
                     f"DELETE FROM {table_name} WHERE audit_id IN ({','.join(['?']*len(audit_ids))})",
                     audit_ids
                 ) as cursor:
-                    pass
+                    pass 
         
                 # Обрабатываем полученные данные
                 for audit_row in audit_rows:

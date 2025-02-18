@@ -356,13 +356,41 @@ class GoogleSheetsManager:
                     body={'values': [values]}
                 )
             elif action_type == 'UPDATE':
-                range_name = f"{sheet_name}!A{row_data['audit_id'] + 1}"
+                # Получаем маппинг колонок для текущей таблицы
+                column_mapping = COLUMN_TRANSLATIONS.get(sheet_name, {})
+                # Получаем английское и русское название колонки ID
+                pk_column_eng = next(iter(column_mapping.keys()))
+                pk_column_ru = column_mapping[pk_column_eng]
+                
+                # Ищем строку по значению первичного ключа
+                result = await self._execute_api_call(
+                    self.sheets.values().get,
+                    spreadsheetId=SPREADSHEET_ID,
+                    range=f"{sheet_name}!A:Z"
+                )
+                rows = result.get('values', [])
+                
+                # Ищем индекс строки с совпадающим ID в первой колонке
+                row_index = None
+                for i, row in enumerate(rows[1:]):  # Пропускаем заголовок
+                    if row and row[0] == str(row_data[pk_column_eng]):
+                        row_index = i + 1  # Смещение для заголовка
+                        break
+                
+                if row_index is None:
+                    logger.error(f"Строка с {pk_column_ru}={row_data[pk_column_eng]} не найдена")
+                    return
+                
+                # Формируем данные для обновления в правильном порядке колонок
+                update_values = [row_data.get(col) for col in column_mapping.keys()]
+                
+                # Обновляем найденную строку
                 await self._execute_api_call(
                     self.sheets.values().update,
                     spreadsheetId=SPREADSHEET_ID,
-                    range=range_name,
+                    range=f"{sheet_name}!A{row_index + 1}",
                     valueInputOption='USER_ENTERED',
-                    body={'values': [self._convert_row_values(row_data)]}
+                    body={'values': [update_values]}
                 )
 
         except HttpError as e:
