@@ -6,20 +6,20 @@ import re
 from datetime import datetime
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-from app.database import db
 from app.credentials import GOOGLE_CREDS, SPREADSHEET_ID
 from app.services.dictionary import COLUMN_TRANSLATIONS
 
 logger = logging.getLogger(__name__)
 
 class GoogleSheetsManager:
-    def __init__(self):
+    def __init__(self, db_instance=None):  # Добавлен параметр для инъекции зависимости
         self.creds = Credentials.from_service_account_file(
             GOOGLE_CREDS,
             scopes=['https://www.googleapis.com/auth/spreadsheets']
         )
         self.service = build('sheets', 'v4', credentials=self.creds)
         self.sheets = self.service.spreadsheets()
+        self.db = db_instance  # Сохраняем ссылку на экземпляр БД
 
     async def _execute_api_call(self, func, *args, **kwargs):
         """Обработка асинхронных вызовов API"""
@@ -96,7 +96,7 @@ class GoogleSheetsManager:
         """Получение ограничений с исправленным парсингом многострочных CHECK"""
         constraints = {}
         try:
-            async with db.execute(
+            async with self.db.execute(
                 "SELECT sql FROM sqlite_master WHERE type='table' AND name=?", 
                 (table_name,)
             ) as cursor:
@@ -142,7 +142,7 @@ class GoogleSheetsManager:
     async def _get_column_types(self, table_name: str) -> Dict[str, str]:
         """Получение типов данных колонок из схемы БД"""
         column_types = {}
-        async with db.execute(f"PRAGMA table_info({table_name})") as cursor:
+        async with self.db.execute(f"PRAGMA table_info({table_name})") as cursor:
             for row in await cursor.fetchall():
                 col_name = row[1].lower()
                 col_type = row[2].upper()
@@ -291,7 +291,7 @@ class GoogleSheetsManager:
         await self.ensure_sheet_exists(table_name)
         
         # Получаем метаданные таблицы
-        async with db.execute(f"PRAGMA table_info({table_name})") as cursor:
+        async with self.db.execute(f"PRAGMA table_info({table_name})") as cursor:
             columns_info = await cursor.fetchall()
             columns = [row[1] for row in columns_info]
             column_types = {row[1]: row[2].upper() for row in columns_info}
@@ -339,11 +339,69 @@ class GoogleSheetsManager:
                 }
             )
 
+    async def sync_single_row(self, sheet_name: str, row_data: dict, action_type: str):
+        """Синхронизация одной строки с учетом типа действия"""
+        try:
+            if action_type == 'INSERT':
+                # Получаем маппинг колонок для текущей таблицы
+                column_mapping = COLUMN_TRANSLATIONS.get(sheet_name, {})
+                # Формируем данные в порядке следования колонок из словаря
+                values = [row_data.get(eng_col) for eng_col in column_mapping.keys()]
+                
+                await self._execute_api_call(
+                    self.sheets.values().append,
+                    spreadsheetId=SPREADSHEET_ID,
+                    range=f"{sheet_name}!A:A",
+                    valueInputOption='USER_ENTERED',
+                    body={'values': [values]}
+                )
+            elif action_type == 'UPDATE':
+                range_name = f"{sheet_name}!A{row_data['audit_id'] + 1}"
+                await self._execute_api_call(
+                    self.sheets.values().update,
+                    spreadsheetId=SPREADSHEET_ID,
+                    range=range_name,
+                    valueInputOption='USER_ENTERED',
+                    body={'values': [self._convert_row_values(row_data)]}
+                )
+
+        except HttpError as e:
+            logger.error(f"Google Sheets API Error: {str(e)}")
+
+    async def delete_row(self, sheet_name: str, row_data: dict):
+        """Удаление строки из таблицы"""
+        try:
+            sheet_id = await self._get_sheet_id(sheet_name)
+            await self._execute_api_call(
+                self.sheets.batchUpdate,
+                spreadsheetId=SPREADSHEET_ID,
+                body={
+                    "requests": [{
+                        "deleteDimension": {
+                            "range": {
+                                "sheetId": sheet_id,
+                                "dimension": "ROWS",
+                                "startIndex": row_data['audit_id'],
+                                "endIndex": row_data['audit_id'] + 1
+                            }
+                        }
+                    }]
+                }
+            )
+        except HttpError as e:
+            logger.error(f"Google Sheets Delete Error: {str(e)}")
+
+    def _convert_row_values(self, row_data: dict) -> list:
+        """Конвертация данных строки для Google Sheets"""
+        return [
+            row_data.get(col, '') 
+            for col in COLUMN_TRANSLATIONS.get(row_data['table_name'], {}).keys()
+        ]
     # Обновленная функция для синхронизации данных
     async def sync_data_to_sheet(self, table_name: str) -> None:
         """Синхронизация данных без инициализации структуры"""
         # Получаем данные
-        async with db.execute(f"SELECT * FROM {table_name}") as cursor:
+        async with self.db.execute(f"SELECT * FROM {table_name}") as cursor:
             data = await cursor.fetchall()
 
         # Преобразуем данные
@@ -375,8 +433,8 @@ class GoogleSheetsManager:
     async def full_sync(self) -> Dict[str, str]:
         """Полная синхронизация всех таблиц"""
         results = {}
-        async with db.execute("""SELECT name FROM sqlite_master 
-                        WHERE type='table' AND name NOT LIKE 'sqlite_%'""") as cursor:
+        async with self.db.execute("""SELECT name FROM sqlite_master 
+                        WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '%_audit'""") as cursor:
             tables = [row[0] for row in await cursor.fetchall()]
 
         for table in tables:

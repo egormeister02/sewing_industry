@@ -73,7 +73,7 @@ async def process_registration_name(message: types.Message, state: FSMContext):
 
         async with db.execute(
             """INSERT INTO employees (name, job, tg_id, status)
-            VALUES (?, ?, ?, 'approved')""",   # на время разработки статус approved
+            VALUES (?, ?, ?, 'одобрено')""",   # на время разработки статус approved
             (data['name'], data['job'], user_id)
         ) as cursor:
             await db.fetchall(cursor)
@@ -109,7 +109,7 @@ async def approve_user(callback: types.CallbackQuery):
         
         # Обновляем статус пользователя
         async with db.execute(
-            "UPDATE employees SET status = 'approved' WHERE tg_id = ?",
+            "UPDATE employees SET status = 'одобрено' WHERE tg_id = ?",
             (user_id,)
         ) as cursor:
             await db.fetchall(cursor)

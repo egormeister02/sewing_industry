@@ -40,12 +40,9 @@ async def update_managers_in_db():
     except Exception as e:
         logger.error(f"Критическая ошибка: {str(e)}")
         raise
-    finally:
-        await db.close()
 
 @app.before_serving
 async def startup():
-    logger.info("Инициализация БД")
     await init_db()
     
     logger.info("Обновление менеджеров")
@@ -56,12 +53,11 @@ async def startup():
     await bot.set_webhook(f"{WEBHOOK_URL}/webhook")
 
     logger.info("Настройка Google Sheets")
-    sheets = GoogleSheetsManager()
     async with db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'") as cursor:
         tables = [row[0] for row in await cursor.fetchall()]
         for table in tables:
-            await sheets.initialize_sheet(table)
-    await sheets.full_sync()
+            await db.sheets.initialize_sheet(table)
+    await db.sheets.full_sync()
 
 @app.route('/webhook', methods=['POST'])
 async def webhook_handler():
