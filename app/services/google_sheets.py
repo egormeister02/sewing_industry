@@ -4,10 +4,11 @@ from typing import Dict, List, Optional
 from google.oauth2.service_account import Credentials
 import re
 from datetime import datetime
+import hashlib
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from app.credentials import GOOGLE_CREDS, SPREADSHEET_ID
-from app.services.dictionary import COLUMN_TRANSLATIONS
+from app.services.dictionary import COLUMN_TRANSLATIONS, TABLE_TRANSLATIONS
 
 logger = logging.getLogger(__name__)
 
@@ -44,9 +45,10 @@ class GoogleSheetsManager:
         )
         return result['spreadsheetId']
 
-    async def ensure_sheet_exists(self, sheet_name: str) -> None:
+    async def ensure_sheet_exists(self, table_name: str) -> None:
         """Проверка и создание листа с обработкой спецсимволов"""
-        # Очищаем название листа от недопустимых символов
+        # Переводим название таблицы на русский
+        sheet_name = TABLE_TRANSLATIONS.get(table_name, table_name)
         clean_name = self._sanitize_sheet_name(sheet_name)
         
         # Получаем список всех листов
@@ -91,7 +93,7 @@ class GoogleSheetsManager:
             ']': ')'
         })).strip("'")
     
-    
+
     async def _get_column_constraints(self, table_name: str) -> Dict[str, List[str]]:
         """Получение ограничений с исправленным парсингом многострочных CHECK"""
         constraints = {}
@@ -181,8 +183,11 @@ class GoogleSheetsManager:
             }
         return None
 
-    async def _apply_data_validation(self, sheet_name: str, constraints: Dict[str, List[str]]):
-        """Применение правил валидации к листу с расширенным логированием"""
+    async def _apply_data_validation(self, table_name: str, constraints: Dict[str, List[str]]):
+        """Применение правил валидации к листу с учетом перевода названий таблиц"""
+        # Переводим название таблицы на русский
+        sheet_name = TABLE_TRANSLATIONS.get(table_name, table_name)
+        
         if not constraints:
             logger.info(f"No constraints to apply for {sheet_name}")
             return
@@ -195,18 +200,18 @@ class GoogleSheetsManager:
                 return
                 
             # Создаем обратный словарь для перевода русских названий в английские
-            translations = COLUMN_TRANSLATIONS.get(sheet_name, {})
+            translations = COLUMN_TRANSLATIONS.get(table_name, {})
             reverse_translations = {v.lower(): k for k, v in translations.items()}
             
             # Сопоставляем русские заголовки с английскими именами колонок
             columns = {col.lower(): idx for idx, col in enumerate(data[0])}
             logger.debug(f"Columns for {sheet_name}: {columns}")
 
-            column_types = await self._get_column_types(sheet_name)
-            logger.info(f"Detected column types for {sheet_name}: {column_types}")
+            column_types = await self._get_column_types(table_name)
+            logger.info(f"Detected column types for {table_name}: {column_types}")
 
             # Получаем ID листа
-            sheet_id = await self._get_sheet_id(sheet_name)
+            sheet_id = await self._get_sheet_id(table_name)
             logger.info(f"Applying validation to sheet {sheet_name} (ID: {sheet_id})")
 
             requests = []
@@ -287,14 +292,16 @@ class GoogleSheetsManager:
 
     async def initialize_sheet(self, table_name: str) -> None:
         """Инициализация структуры листа"""
-        # Создаем лист при необходимости
-        await self.ensure_sheet_exists(table_name)
+        # Переводим название таблицы на русский
+        sheet_name = TABLE_TRANSLATIONS.get(table_name, table_name)
+        await self.ensure_sheet_exists(sheet_name)
         
         # Получаем метаданные таблицы
         async with self.db.execute(f"PRAGMA table_info({table_name})") as cursor:
             columns_info = await cursor.fetchall()
             columns = [row[1] for row in columns_info]
             column_types = {row[1]: row[2].upper() for row in columns_info}
+        
         # Переводим заголовки
         translated_columns = [
             COLUMN_TRANSLATIONS.get(table_name, {}).get(col, col)
@@ -305,13 +312,14 @@ class GoogleSheetsManager:
         await self._execute_api_call(
             self.sheets.values().update,
             spreadsheetId=SPREADSHEET_ID,
-            range=f"{table_name}!A1",
+            range=f"{sheet_name}!A1",
             valueInputOption='USER_ENTERED',
             body={'values': [translated_columns]}
         )
+        
         # Применяем форматирование дат
         if any(col_type == 'DATETIME' for col_type in column_types.values()):
-            sheet_id = await self._get_sheet_id(table_name)
+            sheet_id = await self._get_sheet_id(sheet_name)
             await self._execute_api_call(
                 self.sheets.batchUpdate,
                 spreadsheetId=SPREADSHEET_ID,
@@ -328,7 +336,7 @@ class GoogleSheetsManager:
                                 "userEnteredFormat": {
                                     "numberFormat": {
                                         "type": "DATE_TIME",
-                                        "pattern": "dd.mm.yyyy hh:mm"
+                                        "pattern": "dd.MM.yyyy HH:mm"
                                     }
                                 }
                             },
@@ -338,15 +346,19 @@ class GoogleSheetsManager:
                     if column_types.get(col_name) == 'DATETIME']
                 }
             )
+        
+        # Применяем валидацию
+        constraints = await self._get_column_constraints(table_name)
+        await self._apply_data_validation(table_name, constraints)
 
-    async def sync_single_row(self, sheet_name: str, row_data: dict, action_type: str):
+    async def sync_single_row(self, table_name: str, row_data: dict, action_type: str):
         """Синхронизация одной строки с учетом типа действия"""
         try:
+            sheet_name = TABLE_TRANSLATIONS.get(table_name, table_name)
+            
             if action_type == 'INSERT':
-                # Получаем маппинг колонок для текущей таблицы
-                column_mapping = COLUMN_TRANSLATIONS.get(sheet_name, {})
-                # Формируем данные в порядке следования колонок из словаря
-                values = [row_data.get(eng_col) for eng_col in column_mapping.keys()]
+                column_mapping = COLUMN_TRANSLATIONS.get(table_name, {})
+                values = [row_data.get(col) for col in column_mapping.keys()]
                 
                 await self._execute_api_call(
                     self.sheets.values().append,
@@ -356,13 +368,9 @@ class GoogleSheetsManager:
                     body={'values': [values]}
                 )
             elif action_type == 'UPDATE':
-                # Получаем маппинг колонок для текущей таблицы
-                column_mapping = COLUMN_TRANSLATIONS.get(sheet_name, {})
-                # Получаем английское и русское название колонки ID
-                pk_column_eng = next(iter(column_mapping.keys()))
-                pk_column_ru = column_mapping[pk_column_eng]
+                column_mapping = COLUMN_TRANSLATIONS.get(table_name, {})
+                pk_column = next(iter(column_mapping.keys()))
                 
-                # Ищем строку по значению первичного ключа
                 result = await self._execute_api_call(
                     self.sheets.values().get,
                     spreadsheetId=SPREADSHEET_ID,
@@ -370,28 +378,20 @@ class GoogleSheetsManager:
                 )
                 rows = result.get('values', [])
                 
-                # Ищем индекс строки с совпадающим ID в первой колонке
-                row_index = None
-                for i, row in enumerate(rows[1:]):  # Пропускаем заголовок
-                    if row and row[0] == str(row_data[pk_column_eng]):
-                        row_index = i + 1  # Смещение для заголовка
-                        break
-                
-                if row_index is None:
-                    logger.error(f"Строка с {pk_column_ru}={row_data[pk_column_eng]} не найдена")
-                    return
-                
-                # Формируем данные для обновления в правильном порядке колонок
-                update_values = [row_data.get(col) for col in column_mapping.keys()]
-                
-                # Обновляем найденную строку
-                await self._execute_api_call(
-                    self.sheets.values().update,
-                    spreadsheetId=SPREADSHEET_ID,
-                    range=f"{sheet_name}!A{row_index + 1}",
-                    valueInputOption='USER_ENTERED',
-                    body={'values': [update_values]}
+                row_index = next(
+                    (i+1 for i, row in enumerate(rows[1:]) if row and row[0] == str(row_data[pk_column])),
+                    None
                 )
+                
+                if row_index:
+                    update_values = [row_data.get(col) for col in column_mapping.keys()]
+                    await self._execute_api_call(
+                        self.sheets.values().update,
+                        spreadsheetId=SPREADSHEET_ID,
+                        range=f"{sheet_name}!A{row_index+1}",
+                        valueInputOption='USER_ENTERED',
+                        body={'values': [update_values]}
+                    )
 
         except HttpError as e:
             logger.error(f"Google Sheets API Error: {str(e)}")
@@ -428,6 +428,13 @@ class GoogleSheetsManager:
     # Обновленная функция для синхронизации данных
     async def sync_data_to_sheet(self, table_name: str) -> None:
         """Синхронизация данных без инициализации структуры"""
+        # Переводим название таблицы на русский
+        sheet_name = TABLE_TRANSLATIONS.get(table_name, table_name)
+        
+        # Получаем типы колонок и маппинг
+        column_types = await self._get_column_types(table_name)
+        column_mapping = COLUMN_TRANSLATIONS.get(table_name, {})
+        
         # Получаем данные
         async with self.db.execute(f"SELECT * FROM {table_name}") as cursor:
             data = await cursor.fetchall()
@@ -436,27 +443,27 @@ class GoogleSheetsManager:
         values = []
         for row in data:
             converted_row = []
-            for idx, value in enumerate(row):
-                if isinstance(value, int) or isinstance(value, float):
-                    converted_row.append(value)
-                elif isinstance(value, datetime):
-                    converted_row.append(value.strftime("%d.%m.%Y %H:%M"))
+            for idx, (col_name, value) in enumerate(zip(column_mapping.keys(), row)):
+                if column_types.get(col_name) == 'DATETIME':
+                    if isinstance(value, datetime):
+                        converted_value = value.strftime("%d.%m.%Y %H:%M")
+                    elif isinstance(value, str):
+                        converted_value = datetime.fromisoformat(value).strftime("%d.%m.%Y %H:%M")
+                    else:
+                        converted_value = ""
                 else:
-                    converted_row.append(str(value))
+                    converted_value = value
+                converted_row.append(converted_value)
             values.append(converted_row)
 
         # Обновляем данные
         await self._execute_api_call(
             self.sheets.values().update,
             spreadsheetId=SPREADSHEET_ID,
-            range=f"{table_name}!A2",
+            range=f"{sheet_name}!A2",
             valueInputOption='USER_ENTERED',
             body={'values': values}
         )
-
-        # Применяем валидацию
-        constraints = await self._get_column_constraints(table_name)
-        await self._apply_data_validation(table_name, constraints)
 
     async def full_sync(self) -> Dict[str, str]:
         """Полная синхронизация всех таблиц"""
@@ -477,8 +484,11 @@ class GoogleSheetsManager:
                 logger.error(f"Sync failed for {table}: {e}")
         return results
 
-    async def _get_sheet_id(self, sheet_name: str) -> int:
+    async def _get_sheet_id(self, table_name: str) -> int:
         """Получение ID листа по названию"""
+        # Переводим название таблицы на русский
+        sheet_name = TABLE_TRANSLATIONS.get(table_name, table_name)
+        
         spreadsheet = await self._execute_api_call(
             self.sheets.get,
             spreadsheetId=SPREADSHEET_ID,

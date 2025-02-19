@@ -49,32 +49,33 @@ class Database:
                 logger.error(f"Ошибка в polling loop: {str(e)}", exc_info=True)
                 await asyncio.sleep(5)
 
-    async def _process_audit_change(self, table_name):
+    async def _process_audit_change(self, audit_table_name):
         try:
-            main_table = table_name.rsplit('_audit', 1)[0]
+            # Получаем основную таблицу без суффикса _audit
+            main_table = audit_table_name.rsplit('_audit', 1)[0]
             
-            # Сначала получаем данные ДО удаления
-            async with self.execute(f"SELECT * FROM {table_name}") as cursor:
+            # Получаем данные из аудит-таблицы
+            async with self.execute(f"SELECT * FROM {audit_table_name}") as cursor:
                 audit_rows = await self.fetchall(cursor)
                 audit_ids = [row['audit_id'] for row in audit_rows]
 
-            # Затем удаляем записи
             if audit_ids:
-                
+                # Удаляем обработанные записи
                 async with self.execute(
-                    f"DELETE FROM {table_name} WHERE audit_id IN ({','.join(['?']*len(audit_ids))})",
+                    f"DELETE FROM {audit_table_name} WHERE audit_id IN ({','.join(['?']*len(audit_ids))})",
                     audit_ids
                 ) as cursor:
                     pass 
         
-                # Обрабатываем полученные данные
+                # Обрабатываем каждое изменение
                 for audit_row in audit_rows:
                     action_type = audit_row['action_type']
-                    
-                    if action_type == 'DELETE':
-                        await self.sheets.delete_row(main_table, audit_row)
-                    else:
-                        await self.sheets.sync_single_row(main_table, audit_row, action_type)
+                    # Используем оригинальное название таблицы из БД (main_table)
+                    await self.sheets.sync_single_row(
+                        table_name=main_table, 
+                        row_data=dict(audit_row),
+                        action_type=action_type
+                    )
 
         except Exception as e:
             logger.error(f"Audit processing error: {str(e)}")

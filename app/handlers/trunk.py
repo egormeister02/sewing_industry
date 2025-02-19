@@ -36,7 +36,7 @@ async def cmd_start(message: types.Message):
     
     if user:
         job, status = user
-        if status != 'approved':
+        if status != 'одобрено':
             await message.answer("⏳ Ваша регистрация еще не подтверждена менеджером.")
             return
         menu_function = await get_menu_function(job)

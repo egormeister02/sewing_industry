@@ -33,3 +33,9 @@ COLUMN_TRANSLATIONS = {
     }
 }
 
+TABLE_TRANSLATIONS = {
+    'employees': 'Сотрудники',
+    'batches': 'Пачки',
+    'remakes': 'Ремонты'
+}
+

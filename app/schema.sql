@@ -1,19 +1,10 @@
 CREATE TABLE IF NOT EXISTS employees (
-    tg_id INT PRIMARY KEY,
+    tg_id INTEGER PRIMARY KEY AUTOINCREMENT,
     name VARCHAR(64) NOT NULL,
     job VARCHAR(64) NOT NULL CHECK(job IN ('менеджер', 'швея', 'раскройщик', 'контролер ОТК')),
     status VARCHAR(64) NOT NULL CHECK(status IN ('одобрено', 'ожидает подтверждения'))
 );
 
-CREATE TABLE IF NOT EXISTS employees_audit (
-    audit_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    tg_id INT,
-    name VARCHAR(64) NOT NULL,
-    job VARCHAR(64) NOT NULL,
-    status VARCHAR(64) NOT NULL,
-    action_type VARCHAR(10) NOT NULL CHECK(action_type IN ('INSERT', 'UPDATE', 'DELETE')),
-    action_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
 
 CREATE TABLE IF NOT EXISTS batches (
     batch_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -48,10 +39,22 @@ CREATE TABLE IF NOT EXISTS remakes (
     remake_id INTEGER PRIMARY KEY AUTOINCREMENT,
     equipment_nm VARCHAR(64) NOT NULL,
     description VARCHAR(255) NOT NULL,
-    applicant_id INT REFERENCES employees(tg_id),
+    applicant_id INT,
     status VARCHAR(64) NOT NULL CHECK(status IN ('создана', 'в работе', 'завершена')),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    remake_end_dttm TIMESTAMP
+    remake_end_dttm TIMESTAMP,
+
+    FOREIGN KEY(applicant_id) REFERENCES employees(tg_id)
+);
+
+CREATE TABLE IF NOT EXISTS employees_audit (
+    audit_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tg_id INT,
+    name VARCHAR(64),
+    job VARCHAR(64),
+    status VARCHAR(64),
+    action_type VARCHAR(10) NOT NULL CHECK(action_type IN ('INSERT', 'UPDATE', 'DELETE')),
+    action_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS batches_audit (
