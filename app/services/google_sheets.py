@@ -355,11 +355,14 @@ class GoogleSheetsManager:
         """Синхронизация одной строки с учетом типа действия"""
         try:
             sheet_name = TABLE_TRANSLATIONS.get(table_name, table_name)
+            column_mapping = COLUMN_TRANSLATIONS.get(table_name, {})
+            
+            # Получаем английское и русское название колонки ID
+            pk_column_en = next(iter(column_mapping.keys()))  # Первый ключ словаря (англ)
+            pk_column_ru = column_mapping[pk_column_en]       # Соответствующее русское название
             
             if action_type == 'INSERT':
-                column_mapping = COLUMN_TRANSLATIONS.get(table_name, {})
                 values = [row_data.get(col) for col in column_mapping.keys()]
-                
                 await self._execute_api_call(
                     self.sheets.values().append,
                     spreadsheetId=SPREADSHEET_ID,
@@ -367,10 +370,9 @@ class GoogleSheetsManager:
                     valueInputOption='USER_ENTERED',
                     body={'values': [values]}
                 )
-            elif action_type == 'UPDATE':
-                column_mapping = COLUMN_TRANSLATIONS.get(table_name, {})
-                pk_column = next(iter(column_mapping.keys()))
                 
+            elif action_type == 'UPDATE':
+                # Ищем строку по ID в первом столбце
                 result = await self._execute_api_call(
                     self.sheets.values().get,
                     spreadsheetId=SPREADSHEET_ID,
@@ -378,12 +380,15 @@ class GoogleSheetsManager:
                 )
                 rows = result.get('values', [])
                 
+                # Ищем индекс строки с совпадающим ID (первый столбец)
                 row_index = next(
-                    (i+1 for i, row in enumerate(rows[1:]) if row and row[0] == str(row_data[pk_column])),
+                    (i+1 for i, row in enumerate(rows[1:]) 
+                     if row and row[0] == str(row_data[pk_column_en])),
                     None
                 )
                 
                 if row_index:
+                    # Формируем новые значения в правильном порядке колонок
                     update_values = [row_data.get(col) for col in column_mapping.keys()]
                     await self._execute_api_call(
                         self.sheets.values().update,

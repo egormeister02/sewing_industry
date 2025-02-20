@@ -4,7 +4,7 @@ def role_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="Швея", callback_data="role_швея")],
         [InlineKeyboardButton(text="Раскройщик", callback_data="role_раскройщик")],
-        [InlineKeyboardButton(text="Контроллер ОТК", callback_data="role_контроллер ОТК")],
+        [InlineKeyboardButton(text="Контроллер ОТК", callback_data="role_контролер ОТК")],
     ])
 
 def manager_menu():
