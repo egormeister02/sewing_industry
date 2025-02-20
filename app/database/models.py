@@ -1,4 +1,3 @@
-import apsw
 from threading import Thread
 import logging
 import aiosqlite
@@ -6,7 +5,6 @@ from contextlib import asynccontextmanager
 from app.credentials import DB_PATH
 from app.services.google_sheets import GoogleSheetsManager
 import asyncio
-import time
 
 logger = logging.getLogger(__name__)
 
