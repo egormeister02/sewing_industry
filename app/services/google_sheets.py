@@ -61,6 +61,12 @@ class GoogleSheetsManager:
         # Проверяем существование листа
         existing_sheets = [s['properties']['title'] for s in spreadsheet['sheets']]
         if clean_name in existing_sheets:
+            await self._execute_api_call(
+                self.sheets.values().clear,
+                spreadsheetId=SPREADSHEET_ID,
+                range=f"{sheet_name}!A:O",
+                body={}
+            )
             return
     
         # Создаем новый лист
@@ -295,7 +301,6 @@ class GoogleSheetsManager:
         # Переводим название таблицы на русский
         sheet_name = TABLE_TRANSLATIONS.get(table_name, table_name)
         await self.ensure_sheet_exists(sheet_name)
-        
         # Получаем метаданные таблицы
         async with self.db.execute(f"PRAGMA table_info({table_name})") as cursor:
             columns_info = await cursor.fetchall()
@@ -407,7 +412,7 @@ class GoogleSheetsManager:
             sheet_id = await self._get_sheet_id(sheet_name)
             await self._execute_api_call(
                 self.sheets.batchUpdate,
-                spreadsheetId=SPREADSHEET_ID,
+                spreadsheetId=SPREADSHEET_ID, 
                 body={
                     "requests": [{
                         "deleteDimension": {
@@ -432,9 +437,10 @@ class GoogleSheetsManager:
         ]
     # Обновленная функция для синхронизации данных
     async def sync_data_to_sheet(self, table_name: str) -> None:
-        """Синхронизация данных без инициализации структуры"""
+        """Синхронизация данных с предварительной очисткой листа"""
         # Переводим название таблицы на русский
         sheet_name = TABLE_TRANSLATIONS.get(table_name, table_name)
+        
         
         # Получаем типы колонок и маппинг
         column_types = await self._get_column_types(table_name)
@@ -461,7 +467,7 @@ class GoogleSheetsManager:
                 converted_row.append(converted_value)
             values.append(converted_row)
 
-        # Обновляем данные
+        # Записываем новые данные
         await self._execute_api_call(
             self.sheets.values().update,
             spreadsheetId=SPREADSHEET_ID,
@@ -481,7 +487,6 @@ class GoogleSheetsManager:
 
         for table in tables:
             try:
-                await self.ensure_sheet_exists(table)
                 await self.sync_data_to_sheet(table)
                 results[table] = 'OK'
             except Exception as e:

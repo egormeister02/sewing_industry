@@ -1,3 +1,4 @@
 from app.database import db
 from app.bot import bot
-__all__ = ["db", "bot"]
+from app.main import logger
+__all__ = ["db", "bot", "logger"]

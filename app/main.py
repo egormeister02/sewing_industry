@@ -7,7 +7,7 @@ from app.handlers import manager, seamstress, cutter, controller, trunk
 from app.database import init_db, db
 from app.credentials import WEBHOOK_URL, MANAGERS_ID
 from app.bot import bot
-from app.services import GoogleSheetsManager
+from app.services.update_from_sheets import handle_google_sheets_update
 # Настройка логирования
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -65,12 +65,22 @@ async def startup():
 @app.route('/webhook', methods=['POST'])
 async def webhook_handler():
     try:
-        update = types.Update(**await request.get_json())
-        asyncio.create_task(dp.feed_update(bot, update))  # Обработка в фоне
-        return jsonify({'status': 'ok'})
+        data = await request.get_json()
+        #logger.info(f"Получены данные: {data}")
+        
+        # Изменим проверку на более точную
+        if 'update_id' in data:  # Это запрос от Telegram
+            update = types.Update(**data)
+            await dp.feed_update(bot, update)
+            return jsonify({'status': 'ok'})
+        else:  # Это запрос от Google Sheets
+            await handle_google_sheets_update(data)
+            return jsonify({'status': 'ok'})
+            
     except Exception as e:
         logger.error(f"Webhook error: {str(e)}")
-        return jsonify({'status': 'error'}), 500
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
 
 if __name__ == '__main__':
     from hypercorn.config import Config
