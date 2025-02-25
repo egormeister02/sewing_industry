@@ -361,13 +361,39 @@ class GoogleSheetsManager:
         try:
             sheet_name = TABLE_TRANSLATIONS.get(table_name, table_name)
             column_mapping = COLUMN_TRANSLATIONS.get(table_name, {})
+            column_types = await self._get_column_types(table_name)
             
-            # Получаем английское и русское название колонки ID
-            pk_column_en = next(iter(column_mapping.keys()))  # Первый ключ словаря (англ)
-            pk_column_ru = column_mapping[pk_column_en]       # Соответствующее русское название
+            # Преобразование данных перед отправкой
+            formatted_data = {}
+            for col_en, col_ru in column_mapping.items():
+                value = row_data.get(col_en)
+                
+                if column_types.get(col_en) == 'DATETIME' and value:
+                    # Универсальное преобразование даты
+                    if isinstance(value, str):
+                        try:
+                            # Парсим из строки ISO формата
+                            dt = datetime.fromisoformat(value.replace('Z', '+00:00'))
+                        except ValueError:
+                            # Парсим из SQLite формата (если используется)
+                            dt = datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
+                    elif isinstance(value, datetime):
+                        dt = value
+                    else:
+                        dt = None
+                    
+                    if dt:
+                        # Форматируем для Google Sheets
+                        formatted_data[col_en] = dt.strftime("%d.%m.%Y %H:%M")
+                    else:
+                        formatted_data[col_en] = ''
+                else:
+                    formatted_data[col_en] = value
+
+            # Остальная часть функции остается без изменений
+            values = [formatted_data.get(col) for col in column_mapping.keys()]
             
             if action_type == 'INSERT':
-                values = [row_data.get(col) for col in column_mapping.keys()]
                 await self._execute_api_call(
                     self.sheets.values().append,
                     spreadsheetId=SPREADSHEET_ID,
@@ -388,19 +414,17 @@ class GoogleSheetsManager:
                 # Ищем индекс строки с совпадающим ID (первый столбец)
                 row_index = next(
                     (i+1 for i, row in enumerate(rows[1:]) 
-                     if row and row[0] == str(row_data[pk_column_en])),
+                     if row and row[0] == str(row_data[next(iter(column_mapping.keys()))])),
                     None
                 )
                 
                 if row_index:
-                    # Формируем новые значения в правильном порядке колонок
-                    update_values = [row_data.get(col) for col in column_mapping.keys()]
                     await self._execute_api_call(
                         self.sheets.values().update,
                         spreadsheetId=SPREADSHEET_ID,
                         range=f"{sheet_name}!A{row_index+1}",
                         valueInputOption='USER_ENTERED',
-                        body={'values': [update_values]}
+                        body={'values': [values]}
                     )
 
         except HttpError as e:
