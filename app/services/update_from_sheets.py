@@ -6,7 +6,7 @@ from app.database import db
 from app.services.dictionary import TABLE_TRANSLATIONS, COLUMN_TRANSLATIONS
 from app.credentials import MANAGERS_ID
 from app.bot import bot
-
+from app.keyboards.inline import change_google_sheet
 # Конфигурация повторных попыток
 MAX_RETRIES = 3
 RETRY_DELAY = 2  # секунды
@@ -19,21 +19,35 @@ def retry(attempts: int, delay: float, exceptions: tuple):
                     return await func(*args, **kwargs)
                 except exceptions as e:
                     if attempt == attempts:
+                        logger.error(f"Ошибка после {attempts} попыток: {str(e)}")
                         raise
-                    await asyncio.sleep(delay)
+                    logger.warning(f"Попытка {attempt} из {attempts} не удалась: {str(e)}. Повторная попытка через {delay} сек...")
+                    await asyncio.sleep(delay * (2 ** (attempt - 1)))  # Экспоненциальная задержка
+            return None
         return wrapper
     return decorator
 
-@retry(attempts=MAX_RETRIES, delay=RETRY_DELAY, 
-       exceptions=(ssl.SSLError, TimeoutError, ConnectionError))
+# Расширенный список исключений для сетевых проблем
+NETWORK_EXCEPTIONS = (
+    ssl.SSLError,             # Все ошибки SSL
+    TimeoutError,             # Таймауты
+    ConnectionError,          # Ошибки соединения
+    ConnectionResetError,     # Сброс соединения
+    ConnectionRefusedError,   # Отказ в соединении
+    ConnectionAbortedError,   # Прерывание соединения
+    BrokenPipeError,          # Разорванное соединение
+    OSError,                  # Общие ошибки ОС, включая сетевые
+)
+
+@retry(attempts=MAX_RETRIES, delay=RETRY_DELAY, exceptions=NETWORK_EXCEPTIONS)
 async def safe_db_operation(func, *args, **kwargs):
     """Безопасное выполнение операций с БД с повторными попытками"""
     try:
         if asyncio.iscoroutinefunction(func):
             return await func(*args, **kwargs)
         else:
-            return await func(*args, **kwargs)
-    except (ssl.SSLError, TimeoutError, ConnectionError) as e:
+            return func(*args, **kwargs)
+    except NETWORK_EXCEPTIONS as e:
         logger.warning(f"Сетевая ошибка: {str(e)}. Повторная попытка...")
         raise
 
@@ -55,11 +69,10 @@ async def handle_google_sheets_update(request_data: dict):
             try:
                 if row_id == '':
                     logger.info("Попытка удаления строки")
-                    error_msg = "Попытка удаления строки"
-                    cell_ref = f"Строка {row_id}"
+                    error_msg = f"Если была попытка удаления строки в таблице {sheet_name}\n\
+                                необходимо синхронизовать данные"
                     await _handle_mass_edit_attempt(
-                        sheet_name=sheet_name,
-                        cell_reference=cell_ref,
+                        table_name=table_name,
                         error_msg=error_msg
                     )
                     return
@@ -105,11 +118,10 @@ async def handle_google_sheets_update(request_data: dict):
                 )
         else:
             logger.info("Попытка редактирования нескольких строк одновременно")
-            error_msg = "Попытка редактирования нескольких строк одновременно"
-            cell_ref = f"Строка {row_id}"
+            error_msg = "Редактирование нескольких строк одновременно\n\
+                        необходимо синхронизовать данные"
             await _handle_mass_edit_attempt(
-                sheet_name=sheet_name,
-                cell_reference=cell_ref,
+                table_name=table_name,
                 error_msg=error_msg
             )
 
@@ -125,20 +137,13 @@ async def handle_google_sheets_update(request_data: dict):
         )
     # ... existing code ...
 
-async def _handle_mass_edit_attempt(sheet_name: str, cell_reference: str, error_msg: str):
+async def _handle_mass_edit_attempt(table_name: str, error_msg: str):
     """Обработка попытки массового редактирования"""
     logger.info(f"Отправляем сообщение менеджеру {MANAGERS_ID}")
     if MANAGERS_ID:
-        message = (f"⚠️ Обнаружено массовое редактирование\n\n"
-                  f"• Лист: {sheet_name}\n"
-                  f"• Выбранные ячейки: {cell_reference}\n"
-                  f"• Ошибка: {error_msg}\n\n"
-                  "Пожалуйста, редактируйте ячейки по одной!")
-        
-        
         for manager_id in MANAGERS_ID:
             try:
-                await bot.send_message(chat_id=manager_id, text=message)
+                await bot.send_message(chat_id=manager_id, text=error_msg, reply_markup=change_google_sheet(table_name))
             except Exception as e:
                 logger.error(f"Не удалось отправить сообщение менеджеру {manager_id}: {str(e)}")
 
@@ -197,29 +202,57 @@ async def sync_db_to_sheets(table_name: str):
         if not sheet_name:
             raise ValueError(f"Нет конфигурации для таблицы {table_name}")
 
-        # 2. Загружаем данные из Google Sheets
-        sheet_data = await safe_db_operation(
-            db.sheets.get_all_records,
-            sheet_name=sheet_name,
-            as_dict=True
-        )
+        # 2. Загружаем данные из Google Sheets с повторными попытками
+        try:
+            sheet_data = await safe_db_operation(
+                db.sheets.get_sheet_data,
+                sheet_name=sheet_name
+            )
+        except Exception as e:
+            logger.error(f"Ошибка при загрузке данных из Google Sheets: {str(e)}")
+            raise ValueError(f"Не удалось загрузить данные из таблицы: {str(e)}")
+        
+        # Преобразуем данные из списка списков в список словарей
+        if len(sheet_data) > 1:  # Проверяем, есть ли данные, кроме заголовков
+            headers = sheet_data[0]
+            sheet_records = []
+            for row in sheet_data[1:]:
+                if row:  # Проверяем, что строка не пустая
+                    # Заполняем пустые значения в конце строки
+                    if len(row) < len(headers):
+                        row.extend([''] * (len(headers) - len(row)))
+                    record = {headers[i]: value.strip() if isinstance(value, str) else value for i, value in enumerate(row) if i < len(headers)}
+                    sheet_records.append(record)
+        else:
+            sheet_records = []
 
         # 3. Преобразуем данные
         columns = list(COLUMN_TRANSLATIONS[table_name].keys())
         id_column = columns[0]
         
-        transformed_data = {
-            str(row[COLUMN_TRANSLATIONS[table_name][id_column]]): {
-                col: row[COLUMN_TRANSLATIONS[table_name][col]] 
-                for col in columns
-            }
-            for row in sheet_data if row
-        }
+        transformed_data = {}
+        for row in sheet_records:
+            # Получаем значение ID-колонки из заголовка в Google Sheets
+            sheet_id_column = COLUMN_TRANSLATIONS[table_name][id_column]
+            record_id = row.get(sheet_id_column, '')
+            if record_id:  # Игнорируем строки без ID
+                # Заполняем словарь, преобразуя имена полей из русских в английские
+                record_data = {}
+                for col in columns:
+                    sheet_column = COLUMN_TRANSLATIONS[table_name][col]
+                    value = row.get(sheet_column, '')
+                    # Преобразуем пустые строки в None
+                    record_data[col] = value if value != '' else None
+                transformed_data[str(record_id)] = record_data
 
-        # 4. Получаем текущие данные из БД
-        async with db.execute(f"SELECT * FROM {table_name}") as cursor:
-            db_rows = await cursor.fetchall()
-            db_columns = [desc[0] for desc in cursor.description]
+        # 4. Получаем текущие данные из БД с повторными попытками
+        try:
+            async with db.execute(f"SELECT * FROM {table_name}") as cursor:
+                db_rows = await cursor.fetchall()
+                db_columns = [desc[0] for desc in cursor.description]
+        except Exception as e:
+            logger.error(f"Ошибка при чтении данных из БД: {str(e)}")
+            raise ValueError(f"Не удалось прочитать данные из базы данных: {str(e)}")
         
         db_data = {
             str(row[0]): dict(zip(db_columns, row)) 
@@ -238,41 +271,55 @@ async def sync_db_to_sheets(table_name: str):
 
         to_delete = [id_ for id_ in db_data if id_ not in transformed_data]
 
-        # 6. Выполняем синхронизацию
-        async with db.atomic():
-            # Вставка новых записей
-            if to_insert:
-                await safe_db_operation(
-                    db.execute_many,
-                    f"INSERT INTO {table_name} ({', '.join(columns)}) VALUES ({', '.join(['?']*len(columns))})",
-                    [tuple(item[col] for col in columns) for item in to_insert]
-                )
+        # 6. Выполняем синхронизацию последовательно с обработкой ошибок
+        success_inserts = 0
+        success_updates = 0
+        success_deletes = 0
+        
+        # Вставка новых записей
+        for item in to_insert:
+            try:
+                placeholders = ', '.join(['?'] * len(columns))
+                async with db.execute(
+                    f"INSERT INTO {table_name} ({', '.join(columns)}) VALUES ({placeholders})",
+                    [item.get(col) for col in columns]  # None будет автоматически подставлен для пустых значений
+                ) as cursor:
+                    await cursor.fetchall()
+                success_inserts += 1
+            except Exception as e:
+                logger.error(f"Ошибка при вставке записи {item.get(id_column)}: {str(e)}")
 
-            # Обновление существующих
-            if to_update:
+        # Обновление существующих
+        for item in to_update:
+            try:
                 set_clause = ", ".join([f"{col} = ?" for col in columns[1:]])
-                params = [
-                    (*[item[col] for col in columns[1:]], item[id_column]) 
-                    for item in to_update
-                ]
-                await safe_db_operation(
-                    db.execute_many,
+                values = [item.get(col) for col in columns[1:]]  # None для пустых значений
+                values.append(item.get(id_column))
+                async with db.execute(
                     f"UPDATE {table_name} SET {set_clause} WHERE {id_column} = ?",
-                    params
-                )
+                    values
+                ) as cursor:
+                    await cursor.fetchall()
+                success_updates += 1
+            except Exception as e:
+                logger.error(f"Ошибка при обновлении записи {item.get(id_column)}: {str(e)}")
 
-            # Удаление отсутствующих
-            if to_delete:
-                await safe_db_operation(
-                    db.execute_many,
+        # Удаление отсутствующих
+        for id_ in to_delete:
+            try:
+                async with db.execute(
                     f"DELETE FROM {table_name} WHERE {id_column} = ?",
-                    [(id_,) for id_ in to_delete]
-                )
+                    [id_]
+                ) as cursor:
+                    await cursor.fetchall()
+                success_deletes += 1
+            except Exception as e:
+                logger.error(f"Ошибка при удалении записи {id_}: {str(e)}")
 
         logger.info(f"Синхронизация {table_name} завершена. "
-                   f"Добавлено: {len(to_insert)}, "
-                   f"Обновлено: {len(to_update)}, "
-                   f"Удалено: {len(to_delete)}")
+                  f"Добавлено: {success_inserts}/{len(to_insert)}, "
+                  f"Обновлено: {success_updates}/{len(to_update)}, "
+                  f"Удалено: {success_deletes}/{len(to_delete)}")
 
     except Exception as e:
         logger.error(f"Ошибка синхронизации {table_name}: {str(e)}")

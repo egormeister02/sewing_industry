@@ -1,4 +1,5 @@
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from app.services.dictionary import TABLE_TRANSLATIONS
 
 def role_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
@@ -9,10 +10,12 @@ def role_keyboard():
 
 def manager_menu():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="Отчет по выплатам", callback_data="manager_payments")],
+        [InlineKeyboardButton(text="Данные", callback_data="manager_data")],
         [InlineKeyboardButton(text="Аналитика", callback_data="manager_analytics")],
         [InlineKeyboardButton(text="Список ремонтов", callback_data="manager_remakes")],
         [InlineKeyboardButton(text="Создать образец", callback_data="manager_create_product")],
+        [InlineKeyboardButton(text="Создать пачку", callback_data="manager_create_batch")],
+        [InlineKeyboardButton(text="Проверка пачки", callback_data="manager_check_batch")],
     ])
 
 def approval_keyboard(user_id: int):
@@ -105,4 +108,40 @@ def cancel_button_controller():
 def cancel_button_trunk():
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="Отмена", callback_data="cancel_trunk")]
+    ])
+
+def change_google_sheet(table_name: str):
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✅ Внести изменения", callback_data=f"change_google_sheet_{table_name}")],
+        [InlineKeyboardButton(text="↩️ Откатить", callback_data=f"rollback_google_sheet_{table_name}")],
+        [InlineKeyboardButton(text="Игнорировать", callback_data="ignore_google_sheet")]
+    ])
+
+def tables_selector():
+    """Клавиатура для выбора таблицы данных"""
+    buttons = []
+    
+    for table_name, table_title in TABLE_TRANSLATIONS.items():
+        buttons.append([InlineKeyboardButton(text=table_title, callback_data=f"select_table_{table_name}")])
+    
+    buttons.append([InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_manager_menu")])
+    
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+def table_actions(table_name: str):
+    """Клавиатура для выбора действия с таблицей"""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📊 Google Sheet → БД", callback_data=f"sync_db_to_sheets_{table_name}")],
+        [InlineKeyboardButton(text="📋 БД → Google Sheet", callback_data=f"sync_data_to_sheet_{table_name}")],
+        [InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_tables_selection")],
+        [InlineKeyboardButton(text="🔙 В главное меню", callback_data="back_to_manager_menu")]
+    ])
+
+def back_cancel_keyboard(back_callback: str = "back_step", cancel_callback: str = "cancel_cutter"):
+    """Клавиатура с кнопками Назад и Отмена"""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="◀️ Назад", callback_data=back_callback),
+            InlineKeyboardButton(text="❌ Отмена", callback_data=cancel_callback)
+        ]
     ])

@@ -16,6 +16,8 @@ COLUMN_TRANSLATIONS = {
         'cutter_id': 'ID раскройщика',
         'seamstress_id': 'ID швеи',
         'controller_id': 'ID контролера',
+        'cutter_pay': 'Оплата раскройщика',
+        'seamstress_pay': 'Оплата швеи',
         'status': 'Статус',
         'created_at': 'Дата создания',
         'sew_start_dttm': 'Дата начала шитья',

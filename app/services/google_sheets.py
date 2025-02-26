@@ -9,6 +9,8 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from app.credentials import GOOGLE_CREDS, SPREADSHEET_ID
 from app.services.dictionary import COLUMN_TRANSLATIONS, TABLE_TRANSLATIONS
+import ssl
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -23,13 +25,26 @@ class GoogleSheetsManager:
         self.db = db_instance  # Сохраняем ссылку на экземпляр БД
 
     async def _execute_api_call(self, func, *args, **kwargs):
-        """Обработка асинхронных вызовов API"""
+        """Обработка асинхронных вызовов API с повторными попытками при сбоях"""
         loop = asyncio.get_event_loop()
-        try:
-            return await loop.run_in_executor(None, lambda: func(*args, **kwargs).execute())
-        except HttpError as e:
-            logger.error(f"Google API Error: {e}")
-            raise
+        attempt = 0
+        max_attempts = 3
+        base_delay = 2  # начальная задержка в секундах
+        
+        while True:
+            try:
+                attempt += 1
+                return await loop.run_in_executor(None, lambda: func(*args, **kwargs).execute())
+            except (ssl.SSLError, TimeoutError, ConnectionError, HttpError) as e:
+                # Обработка ошибок сети и SSL
+                if attempt >= max_attempts:
+                    logger.error(f"Google API ошибка после {attempt} попыток: {str(e)}")
+                    raise
+                
+                # Экспоненциальная задержка перед повторной попыткой
+                delay = base_delay * (2 ** (attempt - 1))
+                logger.warning(f"Сетевая/SSL ошибка: {str(e)}. Повторная попытка через {delay} сек...")
+                await asyncio.sleep(delay)
 
     async def create_new_spreadsheet(self, title: str) -> str:
         """Создать новую таблицу"""
@@ -393,7 +408,32 @@ class GoogleSheetsManager:
             # Остальная часть функции остается без изменений
             values = [formatted_data.get(col) for col in column_mapping.keys()]
             
-            if action_type == 'INSERT':
+            # Проверяем существование строки с таким ID
+            result = await self._execute_api_call(
+                self.sheets.values().get,
+                spreadsheetId=SPREADSHEET_ID,
+                range=f"{sheet_name}!A:Z"
+            )
+            rows = result.get('values', [])
+            
+            # Ищем индекс строки с совпадающим ID (первый столбец)
+            row_index = next(
+                (i+1 for i, row in enumerate(rows[1:]) 
+                 if row and row[0] == str(row_data[next(iter(column_mapping.keys()))])),
+                None
+            )
+            
+            if row_index:
+                # Обновляем существующую строку
+                await self._execute_api_call(
+                    self.sheets.values().update,
+                    spreadsheetId=SPREADSHEET_ID,
+                    range=f"{sheet_name}!A{row_index+1}",
+                    valueInputOption='USER_ENTERED',
+                    body={'values': [values]}
+                )
+            else:
+                # Добавляем новую строку
                 await self._execute_api_call(
                     self.sheets.values().append,
                     spreadsheetId=SPREADSHEET_ID,
@@ -401,31 +441,6 @@ class GoogleSheetsManager:
                     valueInputOption='USER_ENTERED',
                     body={'values': [values]}
                 )
-                
-            elif action_type == 'UPDATE':
-                # Ищем строку по ID в первом столбце
-                result = await self._execute_api_call(
-                    self.sheets.values().get,
-                    spreadsheetId=SPREADSHEET_ID,
-                    range=f"{sheet_name}!A:Z"
-                )
-                rows = result.get('values', [])
-                
-                # Ищем индекс строки с совпадающим ID (первый столбец)
-                row_index = next(
-                    (i+1 for i, row in enumerate(rows[1:]) 
-                     if row and row[0] == str(row_data[next(iter(column_mapping.keys()))])),
-                    None
-                )
-                
-                if row_index:
-                    await self._execute_api_call(
-                        self.sheets.values().update,
-                        spreadsheetId=SPREADSHEET_ID,
-                        range=f"{sheet_name}!A{row_index+1}",
-                        valueInputOption='USER_ENTERED',
-                        body={'values': [values]}
-                    )
 
         except HttpError as e:
             logger.error(f"Google Sheets API Error: {str(e)}")

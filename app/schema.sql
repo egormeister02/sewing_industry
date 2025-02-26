@@ -17,7 +17,9 @@ CREATE TABLE IF NOT EXISTS batches (
     cutter_id INT,
     seamstress_id INT,
     controller_id INT,
-    status VARCHAR(64) NOT NULL CHECK(status IN    ('создана',
+    cutter_pay INT,
+    seamstress_pay INT,
+    status VARCHAR(64) CHECK(status IN    ('создана',
                                                     'шьется',
                                                     'пошита',
                                                     'готово',
@@ -37,10 +39,10 @@ CREATE TABLE IF NOT EXISTS batches (
 
 CREATE TABLE IF NOT EXISTS remakes (
     remake_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    equipment_nm VARCHAR(64) NOT NULL,
-    description VARCHAR(255) NOT NULL,
+    equipment_nm VARCHAR(64),
+    description VARCHAR(255),
     applicant_id INT,
-    status VARCHAR(64) NOT NULL CHECK(status IN ('создана', 'в работе', 'завершена')),
+    status VARCHAR(64) CHECK(status IN ('создана', 'в работе', 'завершена')),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     remake_end_dttm TIMESTAMP,
 

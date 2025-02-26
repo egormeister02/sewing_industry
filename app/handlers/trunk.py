@@ -1,6 +1,6 @@
 from aiogram import Router, types
 from aiogram.filters import Command
-from app.keyboards.inline import role_keyboard, cancel_button_trunk, approval_keyboard, manager_menu, seamstress_menu, cutter_menu, controller_menu
+from app.keyboards.inline import role_keyboard, cancel_button_trunk, approval_keyboard, manager_menu, seamstress_menu, cutter_menu, controller_menu, back_cancel_keyboard
 from aiogram import Router, types
 from aiogram.fsm.context import FSMContext
 from app.states import RegistrationStates, RemakeRequest
@@ -73,7 +73,7 @@ async def process_registration_name(message: types.Message, state: FSMContext):
 
         async with db.execute(
             """INSERT INTO employees (name, job, tg_id, status)
-            VALUES (?, ?, ?, 'одобрено')""",   # на время разработки статус approved
+            VALUES (?, ?, ?, 'ожидает подтверждения')""",   # на время разработки статус approved
             (data['name'], data['job'], user_id)
         ) as cursor:
             await db.fetchall(cursor)
@@ -93,7 +93,7 @@ async def process_registration_name(message: types.Message, state: FSMContext):
             )
         menu_func = await get_menu_function(data['job'])
         await message.answer("✅ Заявка отправлена менеджеру. Ожидайте подтверждения.",
-                              reply_markup=menu_func())      # на время разработки показывается меню должности
+                              reply_markup=None)      # на время разработки показывается меню должности
         await state.clear()
 
     except Exception as e:
@@ -209,7 +209,34 @@ async def request_remake(callback: types.CallbackQuery, state: FSMContext):
             menu_keyboard = menu_func()
             await callback.message.answer("Меню:", reply_markup=menu_keyboard)
 
-
+# Обработчик кнопки "Назад" для заявки на ремонт
+@router.callback_query(lambda c: c.data == 'back_step')
+async def back_to_equipment(callback: types.CallbackQuery, state: FSMContext):
+    current_state = await state.get_state()
+    data = await state.get_data()
+    
+    if current_state == RemakeRequest.waiting_for_description:
+        # Возврат к вводу названия оборудования
+        await state.set_state(RemakeRequest.waiting_for_equipment)
+        await callback.message.edit_text(
+            "Введите название оборудования, требующего ремонта:",
+            reply_markup=cancel_button_trunk()
+        )
+    elif current_state and 'waiting_for' in str(current_state):
+        # Для других состояний RemakeRequest, просто отменяем операцию
+        await state.clear()
+        await callback.message.edit_text("Действие отменено")
+        
+        if 'menu_keyboard' in data:
+            await callback.message.answer(
+                "Возврат в меню:",
+                reply_markup=data['menu_keyboard']
+            )
+    else:
+        # Для других состояний, просто игнорируем
+        pass
+    
+    await callback.answer()
 
 @router.message(RemakeRequest.waiting_for_equipment)
 async def process_remake_equipment(message: types.Message, state: FSMContext):
@@ -217,10 +244,9 @@ async def process_remake_equipment(message: types.Message, state: FSMContext):
     await delete_message_reply_markup(message)
     await message.answer(
         "Опишите проблему с оборудованием:",
-        reply_markup=cancel_button_trunk()
+        reply_markup=back_cancel_keyboard("back_step", "cancel_trunk")
     )
     await state.set_state(RemakeRequest.waiting_for_description)
-
 
 @router.message(RemakeRequest.waiting_for_description)
 async def process_remake_description(message: types.Message, state: FSMContext):        

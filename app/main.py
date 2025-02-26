@@ -31,7 +31,7 @@ async def update_managers_in_db():
                 try:
                     async with db.execute(
                         """INSERT OR REPLACE INTO employees (tg_id, job, name, status) 
-                        VALUES (?, 'manager', 'Менеджер', 'appoved')""",
+                        VALUES (?, 'менеджер', 'Менеджер', 'одобрено')""",
                         (manager_id,)
                     ) as cursor:
                         logger.info(f"Менеджер {manager_id} добавлен/обновлен")
