@@ -22,6 +22,7 @@ class ManagerStates(StatesGroup):
     waiting_for_product_cost = State()
     waiting_for_detail_payment = State()
     # Состояния для создания пачки
+    waiting_for_batch_type = State()
     waiting_for_project_name = State()
     waiting_for_product_name = State()
     waiting_for_color = State()
@@ -31,6 +32,7 @@ class ManagerStates(StatesGroup):
     # Состояния для проверки пачки
     waiting_for_qr = State()
     confirm_batch = State()
+    waiting_for_payment_amount = State()
 
 class RegistrationStates(StatesGroup):
     waiting_for_name = State()

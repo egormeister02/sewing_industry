@@ -12,6 +12,7 @@ from app.services.update_from_sheets import sync_db_to_sheets
 import re
 import logging
 import traceback
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -171,14 +172,29 @@ async def start_sync_data_to_sheet(callback: types.CallbackQuery):
             reply_markup=manager_menu()
         )
 
-@router.callback_query(lambda c: c.data == "manager_create_batch")
+@router.callback_query(lambda c: c.data == 'manager_create_batch')
 async def start_create_batch(callback: types.CallbackQuery, state: FSMContext):
     """Начало процесса создания пачки"""
-    await state.set_state(ManagerStates.waiting_for_project_name)
+    await state.set_state(ManagerStates.waiting_for_batch_type)
+    await callback.message.edit_text(
+        "Введите тип пачки:",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="Обычная", callback_data="batch_type_обычная"),
+             InlineKeyboardButton(text="Образец", callback_data="batch_type_образец")]
+        ])
+    )
+    await callback.answer()
+
+@router.callback_query(lambda c: c.data.startswith('batch_type_'))
+async def process_batch_type_selection(callback: types.CallbackQuery, state: FSMContext):
+    """Обработка выбора типа пачки"""
+    batch_type = callback.data.split('_')[2]  # Получаем тип пачки из callback_data
+    await state.update_data(batch_type=batch_type)
     await callback.message.edit_text(
         "Введите название проекта:",
         reply_markup=cancel_button_manager()
     )
+    await state.set_state(ManagerStates.waiting_for_project_name)
     await callback.answer()
 
 @router.message(ManagerStates.waiting_for_project_name)
@@ -235,6 +251,7 @@ async def manager_process_quantity(message: types.Message, state: FSMContext):
     try:
         quantity = int(message.text)
         await state.update_data(quantity=quantity)
+        data = await state.get_data()
         await state.set_state(ManagerStates.waiting_for_parts_count)
         await message.answer("Введите количество деталей в одном изделии:",
         reply_markup=back_cancel_keyboard("manager_back_step", "cancel_manager")
@@ -253,12 +270,12 @@ async def process_parts_count(message: types.Message, state: FSMContext):
         
         # Сохраняем данные в БД
         async with db.execute(
-            """INSERT INTO batches 
-            (project_nm, product_nm, color, size, quantity, parts_count, cutter_id, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """INSERT INTO batches \
+            (project_nm, product_nm, color, size, quantity, parts_count, cutter_id, status, type)\
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)\
             RETURNING batch_id""",
-            (data['project_name'], data['product_name'], data['color'], 
-             data['size'], data['quantity'], parts_count, message.from_user.id, 'создана')
+            (data['project_name'], data['product_name'], data['color'], \
+             data['size'], data['quantity'], parts_count, message.from_user.id, 'создана', data['batch_type'])
         ) as cursor:
             result = await cursor.fetchone()
             if not result or not result[0]:
@@ -339,13 +356,6 @@ async def manager_go_back_step(callback: types.CallbackQuery, state: FSMContext)
             "Введите размер изделия:",
             reply_markup=back_cancel_keyboard("manager_back_step", "cancel_manager")
         )
-    elif current_state == ManagerStates.waiting_for_parts_count.state:
-        # Возврат к вводу количества изделий
-        await state.set_state(ManagerStates.waiting_for_quantity)
-        await callback.message.edit_text(
-            "Введите количество изделий в пачке:",
-            reply_markup=back_cancel_keyboard("manager_back_step", "cancel_manager")
-        )
     elif current_state == ManagerStates.waiting_for_qr.state:
         # Возврат в меню менеджера
         await state.clear()
@@ -415,7 +425,7 @@ async def process_batch_id(message: types.Message, state: FSMContext, batch_id: 
             """
             SELECT b.batch_id as id, b.project_nm as project_name, b.product_nm as product_name, 
                    b.color, b.size, b.quantity, b.parts_count,
-                   b.status, b.created_at, b.updated_at,
+                   b.status, b.created_at, b.updated_at, b.type,
                    c.full_name as cutter_name
             FROM batches b
             LEFT JOIN employees c ON b.cutter_id = c.id
@@ -442,7 +452,8 @@ async def process_batch_id(message: types.Message, state: FSMContext, batch_id: 
                 f"👤 Раскройщик: {batch['cutter_name'] or 'Не указан'}\n"
                 f"📅 Создана: {created_at}\n"
                 f"🔄 Последнее обновление: {updated_at}\n"
-                f"📊 Статус: {batch['status']}"
+                f"📊 Статус: {batch['status']}\n"
+                f"🔄 Тип: {batch['type']}"
             )
             
             # Отправляем информацию о пачке
@@ -470,3 +481,56 @@ async def cancel_manager_operation(callback: types.CallbackQuery, state: FSMCont
     await state.clear()
     await callback.message.edit_text("Операция отменена", reply_markup=manager_menu())
     await callback.answer()
+
+@router.callback_query(lambda c: c.data == 'manager_payments')
+async def show_employee_payments(callback: types.CallbackQuery):
+    # Получаем всех сотрудников (раскройщиков и швей)
+    async with db.execute(
+        "SELECT tg_id, name FROM employees WHERE job IN ('раскройщик', 'швея')"
+    ) as cursor:
+        employees = await cursor.fetchall()
+
+    # Создаем клавиатуру с кнопками для каждого сотрудника
+    buttons = [
+        [InlineKeyboardButton(text=employee['name'], callback_data=f'pay_{employee["tg_id"]}')]
+        for employee in employees
+    ]
+    buttons.append([InlineKeyboardButton(text="Назад", callback_data="cancel_manager")])
+    keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
+
+    await callback.message.edit_text("Выберите сотрудника для выплаты:", reply_markup=keyboard)
+    await callback.answer()
+
+@router.callback_query(lambda c: c.data.startswith('pay_'))
+async def process_employee_selection(callback: types.CallbackQuery, state: FSMContext):
+    employee_id = int(callback.data.split('_')[1])
+    await callback.message.edit_text("Введите сумму выплаты:", reply_markup=cancel_button_manager("manager_back_step", "cancel_manager"))
+    
+    # Сохраняем выбранного сотрудника в состоянии
+    await state.update_data(employee_id=employee_id)
+    await state.set_state(ManagerStates.waiting_for_payment_amount)
+    await callback.answer()
+
+@router.message(ManagerStates.waiting_for_payment_amount)
+async def process_payment_amount(message: types.Message, state: FSMContext):
+    try:
+        amount = int(message.text)
+        data = await state.get_data()
+        employee_id = data['employee_id']
+
+        # Добавляем запись в таблицу payments
+        async with db.execute(
+            """INSERT INTO payments (employee_id, amount) VALUES (?, ?)""",
+            (employee_id, amount)
+        ) as cursor:
+            await cursor.fetchall()
+
+        await message.answer("✅ Выплата успешно добавлена!")
+        await state.clear()
+        await show_manager_menu(message)
+    except ValueError:
+        await message.answer("Пожалуйста, введите корректное целое число.")
+    except Exception as e:
+        await message.answer(f"Ошибка при добавлении выплаты: {str(e)}")
+        await state.clear()
+        await show_manager_menu(message)

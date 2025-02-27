@@ -11,9 +11,7 @@ def role_keyboard():
 def manager_menu():
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="Данные", callback_data="manager_data")],
-        [InlineKeyboardButton(text="Аналитика", callback_data="manager_analytics")],
-        [InlineKeyboardButton(text="Список ремонтов", callback_data="manager_remakes")],
-        [InlineKeyboardButton(text="Создать образец", callback_data="manager_create_product")],
+        [InlineKeyboardButton(text="Выплаты", callback_data="manager_payments")],
         [InlineKeyboardButton(text="Создать пачку", callback_data="manager_create_batch")],
         [InlineKeyboardButton(text="Проверка пачки", callback_data="manager_check_batch")],
     ])
@@ -68,7 +66,6 @@ def cutter_menu():
 def controller_menu():
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="Мои данные", callback_data="controller_data")],
-        [InlineKeyboardButton(text="Мои выплаты", callback_data="controller_payments")],
         [InlineKeyboardButton(text="Проверка пачки", callback_data="controller_take_batch")],
         [InlineKeyboardButton(text="Заявка на ремонт", callback_data="repair")],
     ])

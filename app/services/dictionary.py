@@ -19,10 +19,12 @@ COLUMN_TRANSLATIONS = {
         'cutter_pay': 'Оплата раскройщика',
         'seamstress_pay': 'Оплата швеи',
         'status': 'Статус',
+        'type': 'Тип',
         'created_at': 'Дата создания',
         'sew_start_dttm': 'Дата начала шитья',
         'sew_end_dttm': 'Дата окончания шитья',
-        'control_dttm': 'Дата контроля'
+        'control_dttm': 'Дата контроля',
+        
     },
     'remakes': {
         'remake_id': 'ID ремонта',
@@ -32,12 +34,18 @@ COLUMN_TRANSLATIONS = {
         'status': 'Статус',
         'created_at': 'Дата создания',
         'remake_end_dttm': 'Дата окончания ремонта'
+    },
+    'payments': {
+        'payment_id': 'ID выплаты',
+        'employee_id': 'ID сотрудника',
+        'amount': 'Сумма',
+        'payment_date': 'Дата выплаты'
     }
 }
 
 TABLE_TRANSLATIONS = {
     'employees': 'Сотрудники',
     'batches': 'Пачки',
-    'remakes': 'Ремонты'
+    'remakes': 'Ремонты',
+    'payments': 'Выплаты'
 }
-

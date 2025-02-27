@@ -374,6 +374,7 @@ class GoogleSheetsManager:
     async def sync_single_row(self, table_name: str, row_data: dict, action_type: str):
         """Синхронизация одной строки с учетом типа действия"""
         try:
+            logger.info(f"Syncing single row for {row_data}")
             sheet_name = TABLE_TRANSLATIONS.get(table_name, table_name)
             column_mapping = COLUMN_TRANSLATIONS.get(table_name, {})
             column_types = await self._get_column_types(table_name)

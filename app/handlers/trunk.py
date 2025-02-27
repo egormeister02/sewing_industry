@@ -294,3 +294,5 @@ async def cancel_trunk_actions(callback: types.CallbackQuery, state: FSMContext)
         )
         
     await callback.answer()
+
+

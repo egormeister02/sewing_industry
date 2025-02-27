@@ -226,7 +226,7 @@ async def show_batch_details(callback: types.CallbackQuery, state: FSMContext):
         async with db.execute(
             """SELECT batches.batch_id, batches.project_nm, batches.product_nm, batches.color, batches.size, 
                     batches.quantity, batches.parts_count, batches.seamstress_id, batches.created_at, batches.status,
-                    employees.name 
+                    employees.name, batches.type
             FROM batches 
             JOIN employees ON batches.cutter_id = employees.tg_id
             WHERE batches.batch_id = ? """,
@@ -251,6 +251,7 @@ async def show_batch_details(callback: types.CallbackQuery, state: FSMContext):
             f"Раскройщик: {batch_data[10]}\n"
             f"Дата создания: {batch_data[8]}\n"
             f"Статус: {batch_data[9]}\n"
+            f"Тип: {batch_data[11]}\n"
         )
         if batch_data[9] == 'брак на переделке':
             response = "🔄 Пачка отправлена на переделку\n\n" + response + "\n\n📤 Отправьте QR-код пачки для начала работы"
@@ -318,3 +319,37 @@ async def close_batches_list(callback: types.CallbackQuery):
     await callback.message.delete()
     await callback.answer()
     await new_seamstress_menu(callback)
+
+@router.callback_query(lambda c: c.data == 'seamstress_payments')
+async def show_seamstress_payments(callback: types.CallbackQuery):
+    user_id = callback.from_user.id;
+    
+    # Получаем все выплаты для данного пользователя
+    async with db.execute(
+        "SELECT amount, payment_date FROM payments WHERE employee_id = ?",
+        (user_id,)
+    ) as cursor:
+        payments = await cursor.fetchall();
+    
+    # Получаем сумму предстоящих выплат из представления
+    async with db.execute(
+        "SELECT total_payments, total_pay FROM employee_payment_info WHERE tg_id = ?",
+        (user_id,)
+    ) as cursor:
+        payment_info = await cursor.fetchone();
+    total_payments = payment_info['total_payments'] if payment_info else 0;
+    total_seamstress_pay = payment_info['total_pay'] if payment_info else 0;
+
+    # Формируем сообщение с выплатами
+    payment_details = "\n".join(
+        [f"Сумма: {payment['amount']} | Дата: {payment['payment_date']}" for payment in payments]
+    ) if payments else "Нет выплат.";
+
+    response_message = (
+        f"Ваши выплаты:\n{payment_details}\n\n"
+        f"Сумма предстоящих выплат: {total_seamstress_pay - total_payments}"
+    );
+
+    await callback.message.edit_text(response_message);
+    await new_seamstress_menu(callback)
+    await callback.answer();

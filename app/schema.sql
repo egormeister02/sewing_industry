@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS batches (
                                                     'переделка начата',
                                                     'переделка завершена',
                                                     'неисправимый брак')),
+    type VARCHAR(64) CHECK(type IN ('обычная', 'образец')),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     sew_start_dttm TIMESTAMP,
     sew_end_dttm TIMESTAMP,
@@ -48,6 +49,33 @@ CREATE TABLE IF NOT EXISTS remakes (
 
     FOREIGN KEY(applicant_id) REFERENCES employees(tg_id)
 );
+
+CREATE TABLE IF NOT EXISTS payments (
+    payment_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    employee_id INT,
+    amount INT,
+    payment_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY(employee_id) REFERENCES employees(tg_id)
+);
+
+CREATE VIEW IF NOT EXISTS employee_payment_info AS
+SELECT 
+    e.tg_id,
+    e.name,
+    e.job,
+    COALESCE(SUM(p.amount), 0) AS total_payments,
+    COALESCE(SUM(CASE WHEN e.job = 'швея' THEN b.seamstress_pay ELSE b.cutter_pay END), 0) AS total_pay
+FROM 
+    employees e
+LEFT JOIN 
+    payments p ON e.tg_id = p.employee_id
+LEFT JOIN 
+    batches b ON e.tg_id = b.cutter_id OR e.tg_id = b.seamstress_id
+WHERE 
+    e.job IN ('швея', 'раскройщик')
+GROUP BY 
+    e.tg_id, e.name, e.job;
 
 CREATE TABLE IF NOT EXISTS employees_audit (
     audit_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -72,6 +100,7 @@ CREATE TABLE IF NOT EXISTS batches_audit (
     seamstress_id INT,
     controller_id INT,
     status VARCHAR(64),
+    type VARCHAR(64),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     sew_start_dttm TIMESTAMP,
     sew_end_dttm TIMESTAMP,
@@ -92,6 +121,37 @@ CREATE TABLE IF NOT EXISTS remakes_audit (
     action_type VARCHAR(10) NOT NULL CHECK(action_type IN ('INSERT', 'UPDATE', 'DELETE')),
     action_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS payments_audit (
+    audit_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    payment_id INT,
+    employee_id INT,
+    amount INT,
+    payment_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    action_type VARCHAR(10) NOT NULL CHECK(action_type IN ('INSERT', 'UPDATE', 'DELETE'))
+);
+
+CREATE TRIGGER IF NOT EXISTS log_payment_insert
+AFTER INSERT ON payments
+BEGIN
+    INSERT INTO payments_audit (payment_id, employee_id, amount, payment_date, action_type)
+    VALUES (NEW.payment_id, NEW.employee_id, NEW.amount, NEW.payment_date, 'INSERT');
+END;
+
+CREATE TRIGGER IF NOT EXISTS log_payment_update
+AFTER UPDATE ON payments
+BEGIN
+    INSERT INTO payments_audit (payment_id, employee_id, amount, payment_date, action_type)
+    VALUES (NEW.payment_id, NEW.employee_id, NEW.amount, NEW.payment_date, 'UPDATE');
+END;
+
+CREATE TRIGGER IF NOT EXISTS log_payment_delete
+AFTER DELETE ON payments
+BEGIN
+    INSERT INTO payments_audit (payment_id, employee_id, amount, payment_date, action_type)
+    VALUES (OLD.payment_id, OLD.employee_id, OLD.amount, OLD.payment_date, 'DELETE');
+END;
+
 
 CREATE TRIGGER IF NOT EXISTS log_employee_insert
 AFTER INSERT ON employees
@@ -117,22 +177,22 @@ END;
 CREATE TRIGGER IF NOT EXISTS log_batch_insert
 AFTER INSERT ON batches
 BEGIN
-    INSERT INTO batches_audit (batch_id, project_nm, product_nm, color, size, quantity, parts_count, cutter_id, seamstress_id, controller_id, status, created_at, sew_start_dttm, sew_end_dttm, control_dttm, action_type)
-    VALUES (NEW.batch_id, NEW.project_nm, NEW.product_nm, NEW.color, NEW.size, NEW.quantity, NEW.parts_count, NEW.cutter_id, NEW.seamstress_id, NEW.controller_id, NEW.status, NEW.created_at, NEW.sew_start_dttm, NEW.sew_end_dttm, NEW.control_dttm, 'INSERT');
+    INSERT INTO batches_audit (batch_id, project_nm, product_nm, color, size, quantity, parts_count, cutter_id, seamstress_id, controller_id, status, type, created_at, sew_start_dttm, sew_end_dttm, control_dttm, action_type)
+    VALUES (NEW.batch_id, NEW.project_nm, NEW.product_nm, NEW.color, NEW.size, NEW.quantity, NEW.parts_count, NEW.cutter_id, NEW.seamstress_id, NEW.controller_id, NEW.status, NEW.type, NEW.created_at, NEW.sew_start_dttm, NEW.sew_end_dttm, NEW.control_dttm, 'INSERT');
 END;
 
 CREATE TRIGGER IF NOT EXISTS log_batch_update
 AFTER UPDATE ON batches
 BEGIN
-    INSERT INTO batches_audit (batch_id, project_nm, product_nm, color, size, quantity, parts_count, cutter_id, seamstress_id, controller_id, status, created_at, sew_start_dttm, sew_end_dttm, control_dttm, action_type)
-    VALUES (NEW.batch_id, NEW.project_nm, NEW.product_nm, NEW.color, NEW.size, NEW.quantity, NEW.parts_count, NEW.cutter_id, NEW.seamstress_id, NEW.controller_id, NEW.status, NEW.created_at, NEW.sew_start_dttm, NEW.sew_end_dttm, NEW.control_dttm, 'UPDATE');
+    INSERT INTO batches_audit (batch_id, project_nm, product_nm, color, size, quantity, parts_count, cutter_id, seamstress_id, controller_id, status, type, created_at, sew_start_dttm, sew_end_dttm, control_dttm, action_type)
+    VALUES (NEW.batch_id, NEW.project_nm, NEW.product_nm, NEW.color, NEW.size, NEW.quantity, NEW.parts_count, NEW.cutter_id, NEW.seamstress_id, NEW.controller_id, NEW.status, NEW.type, NEW.created_at, NEW.sew_start_dttm, NEW.sew_end_dttm, NEW.control_dttm, 'UPDATE');
 END;
 
 CREATE TRIGGER IF NOT EXISTS log_batch_delete
 AFTER DELETE ON batches
 BEGIN
-    INSERT INTO batches_audit (batch_id, project_nm, product_nm, color, size, quantity, parts_count, cutter_id, seamstress_id, controller_id, status, created_at, sew_start_dttm, sew_end_dttm, control_dttm, action_type)
-    VALUES (OLD.batch_id, OLD.project_nm, OLD.product_nm, OLD.color, OLD.size, OLD.quantity, OLD.parts_count, OLD.cutter_id, OLD.seamstress_id, OLD.controller_id, OLD.status, OLD.created_at, OLD.sew_start_dttm, OLD.sew_end_dttm, OLD.control_dttm, 'DELETE');
+    INSERT INTO batches_audit (batch_id, project_nm, product_nm, color, size, quantity, parts_count, cutter_id, seamstress_id, controller_id, status, type, created_at, sew_start_dttm, sew_end_dttm, control_dttm, action_type)
+    VALUES (OLD.batch_id, OLD.project_nm, OLD.product_nm, OLD.color, OLD.size, OLD.quantity, OLD.parts_count, OLD.cutter_id, OLD.seamstress_id, OLD.controller_id, OLD.status, OLD.type, OLD.created_at, OLD.sew_start_dttm, OLD.sew_end_dttm, OLD.control_dttm, 'DELETE');
 END;
 
 CREATE TRIGGER IF NOT EXISTS log_remake_insert
