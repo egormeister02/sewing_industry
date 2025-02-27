@@ -53,7 +53,7 @@ CREATE TABLE IF NOT EXISTS remakes (
 CREATE TABLE IF NOT EXISTS payments (
     payment_id INTEGER PRIMARY KEY AUTOINCREMENT,
     employee_id INT,
-    amount INT,
+    amount INT CHECK(amount > 0),
     payment_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
     FOREIGN KEY(employee_id) REFERENCES employees(tg_id)

@@ -209,107 +209,101 @@ class GoogleSheetsManager:
         # Переводим название таблицы на русский
         sheet_name = TABLE_TRANSLATIONS.get(table_name, table_name)
         
-        if not constraints:
-            logger.info(f"No constraints to apply for {sheet_name}")
+        logger.info(f"Начало применения валидации для листа {sheet_name} с ограничениями: {constraints}")
+
+        # Получаем данные и индексы колонок
+        data = await self.get_sheet_data(sheet_name)
+        logger.debug(f"Данные для листа {sheet_name}: {data}")
+        if not data:
+            logger.warning(f"Нет данных для листа {sheet_name}")
             return
 
-        try:
-            # Получаем данные и индексы колонок
-            data = await self.get_sheet_data(sheet_name)
-            if not data:
-                logger.warning(f"No data found for sheet {sheet_name}")
-                return
+        # Создаем обратный словарь для перевода русских названий в английские
+        translations = COLUMN_TRANSLATIONS.get(table_name, {})
+        reverse_translations = {v.lower(): k for k, v in translations.items()}
+        
+        # Сопоставляем русские заголовки с английскими именами колонок
+        columns = {col.lower(): idx for idx, col in enumerate(data[0])}
+        logger.debug(f"Столбцы для {sheet_name}: {columns}")
+
+        column_types = await self._get_column_types(table_name)
+        logger.info(f"Обнаруженные типы колонок для {table_name}: {column_types}")
+
+        # Получаем ID листа
+        sheet_id = await self._get_sheet_id(table_name)
+        logger.info(f"Применение валидации к листу {sheet_name} (ID: {sheet_id})")
+
+        requests = []
+
+        def process_validation(db_col, validation_type, values=None):
+            # Общая логика обработки колонки
+            russian_col = translations.get(db_col, db_col)
+            if russian_col.lower() not in columns:
+                logger.warning(f"Столбец {russian_col} не найден в листе {sheet_name}")
+                return None
                 
-            # Создаем обратный словарь для перевода русских названий в английские
-            translations = COLUMN_TRANSLATIONS.get(table_name, {})
-            reverse_translations = {v.lower(): k for k, v in translations.items()}
-            
-            # Сопоставляем русские заголовки с английскими именами колонок
-            columns = {col.lower(): idx for idx, col in enumerate(data[0])}
-            logger.debug(f"Columns for {sheet_name}: {columns}")
+            col_index = columns[russian_col.lower()]
+            range_def = {
+                "sheetId": sheet_id,
+                "startRowIndex": 1,
+                "startColumnIndex": col_index,
+                "endColumnIndex": col_index + 1
+            }
 
-            column_types = await self._get_column_types(table_name)
-            logger.info(f"Detected column types for {table_name}: {column_types}")
-
-            # Получаем ID листа
-            sheet_id = await self._get_sheet_id(table_name)
-            logger.info(f"Applying validation to sheet {sheet_name} (ID: {sheet_id})")
-
-            requests = []
-
-            def process_validation(db_col, validation_type, values=None):
-                # Общая логика обработки колонки
-                russian_col = translations.get(db_col, db_col)
-                if russian_col.lower() not in columns:
+            # Формируем правило валидации в зависимости от типа
+            if validation_type == 'type':
+                # Получаем полное правило валидации из отдельного метода
+                validation_rule = self._get_validation_rule(col_type)
+                if not validation_rule:
+                    logger.warning(f"Правило валидации для {russian_col} не найдено")
                     return None
                     
-                col_index = columns[russian_col.lower()]
-                range_def = {
-                    "sheetId": sheet_id,
-                    "startRowIndex": 1,
-                    "startColumnIndex": col_index,
-                    "endColumnIndex": col_index + 1
+                rule = {
+                    **validation_rule,
+                    "strict": True,
+                    "showCustomUi": True
                 }
-
-                # Формируем правило валидации в зависимости от типа
-                if validation_type == 'type':
-                    # Получаем полное правило валидации из отдельного метода
-                    validation_rule = self._get_validation_rule(col_type)
-                    if not validation_rule:
-                        return None
-                        
-                    rule = {
-                        **validation_rule,
-                        "strict": True,
-                        "showCustomUi": True
-                    }
-                    logger.debug(f"Added type validation for {russian_col} ({values})")
-                else: # constraint
-                    rule = {
-                        "condition": {
-                            "type": "ONE_OF_LIST",
-                            "values": [{"userEnteredValue": v} for v in values]
-                        },
-                        "strict": True,
-                        "showCustomUi": True
-                    }
-                    logger.debug(f"Added constraint for {russian_col} with {len(values)} values")
-
-                return {
-                    "setDataValidation": {
-                        "range": range_def,
-                        "rule": rule
-                    }
+                logger.debug(f"Добавлено правило валидации для {russian_col} ({values})")
+            else: # constraint
+                rule = {
+                    "condition": {
+                        "type": "ONE_OF_LIST",
+                        "values": [{"userEnteredValue": v} for v in values]
+                    },
+                    "strict": True,
+                    "showCustomUi": True
                 }
+                logger.debug(f"Добавлено ограничение для {russian_col} с {len(values)} значениями")
 
-            # Обрабатываем валидации с учетом структуры _get_validation_rule
-            for db_col, col_type in column_types.items():
-                if request := process_validation(db_col, 'type', col_type):
-                    requests.append(request)
+            return {
+                "setDataValidation": {
+                    "range": range_def,
+                    "rule": rule
+                }
+            }
 
-            for db_col, values in constraints.items():
-                if request := process_validation(db_col, 'constraint', values):
-                    requests.append(request)
-                else:
-                    logger.warning(f"Column {translations.get(db_col, db_col)} not found in sheet {sheet_name}")
+        # Применяем валидацию типов для всех колонок
+        for db_col, col_type in column_types.items():
+            if request := process_validation(db_col, 'type', col_type):
+                requests.append(request)
 
-            if requests:
-                logger.info(f"Sending {len(requests)} validation requests for {sheet_name}")
-                await self._execute_api_call(
-                    self.sheets.batchUpdate,
-                    spreadsheetId=SPREADSHEET_ID,
-                    body={"requests": requests}
-                )
-                logger.info(f"Successfully applied validations to {sheet_name}")
+        # Применяем ограничения, если они есть
+        for db_col, values in constraints.items():
+            if request := process_validation(db_col, 'constraint', values):
+                requests.append(request)
             else:
-                logger.warning(f"No validation requests generated for {sheet_name}")
+                logger.warning(f"Столбец {translations.get(db_col, db_col)} не найден в листе {sheet_name}")
 
-        except HttpError as e:
-            logger.error(f"Google API Error applying validation: {str(e)}")
-            raise
-        except Exception as e:
-            logger.error(f"Unexpected error in validation: {str(e)}")
-            raise
+        if requests:
+            logger.info(f"Отправка {len(requests)} запросов на валидацию для {sheet_name}")
+            await self._execute_api_call(
+                self.sheets.batchUpdate,
+                spreadsheetId=SPREADSHEET_ID,
+                body={"requests": requests}
+            )
+            logger.info(f"Успешно применены валидации к {sheet_name}")
+        else:
+            logger.warning(f"Не сгенерировано запросов на валидацию для {sheet_name}")
 
     async def initialize_sheet(self, table_name: str) -> None:
         """Инициализация структуры листа"""
