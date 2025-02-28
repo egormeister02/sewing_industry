@@ -3,16 +3,17 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import BufferedInputFile
 from io import BytesIO
 from app.states import ManagerStates
-from app.keyboards.inline import manager_menu, cancel_button_manager, tables_selector, table_actions, back_cancel_keyboard, controller_batch_decision, seamstress_menu
+from app.keyboards.inline import manager_menu, manager_batch_decision, cancel_button_manager, tables_selector, table_actions, back_cancel_keyboard, controller_batch_decision, seamstress_menu
 from app.database import db
 from app.services import generate_qr_code
 from app.services.qr_processing import process_qr_code
 from app.handlers.trunk import delete_message_reply_markup
 from app.services.update_from_sheets import sync_db_to_sheets
-import re
+from app.bot import bot
 import logging
 import traceback
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from datetime import datetime
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -30,6 +31,7 @@ async def show_manager_menu(event):
         )
 
 async def new_manager_menu(callback: types.CallbackQuery):
+    await callback.answer()
     await callback.message.answer(
         "Меню менеджера:",
         reply_markup=manager_menu()
@@ -39,11 +41,11 @@ async def new_manager_menu(callback: types.CallbackQuery):
 @router.callback_query(lambda c: c.data == 'cancel_manager')
 async def cancel_creation(callback: types.CallbackQuery, state: FSMContext):
     await state.clear()
+    await callback.answer()
     await callback.message.edit_text(
         "Действие отменено",
         reply_markup=manager_menu()
     )
-    await callback.answer()
 
 
 @router.callback_query(lambda c: c.data.startswith('change_google_sheet_'))
@@ -95,6 +97,7 @@ async def process_sync_data_to_sheet(callback: types.CallbackQuery, state: FSMCo
 
 @router.callback_query(lambda c: c.data == 'ignore_google_sheet')
 async def ignore_google_sheet(callback: types.CallbackQuery):
+    await callback.answer()
     await callback.message.edit_text(
         "Меню менеджера:",
         reply_markup=manager_menu()
@@ -103,31 +106,33 @@ async def ignore_google_sheet(callback: types.CallbackQuery):
 @router.callback_query(lambda c: c.data == 'manager_data')
 async def show_data_tables(callback: types.CallbackQuery):
     """Обработчик для кнопки 'Данные' в меню менеджера"""
+    await callback.answer()
     await callback.message.edit_text(
         "Выберите таблицу для работы с данными:",
         reply_markup=tables_selector()
     )
-    await callback.answer()
 
 @router.callback_query(lambda c: c.data.startswith('select_table_'))
 async def handle_table_selection(callback: types.CallbackQuery):
     """Обработчик выбора таблицы"""
     table_name = callback.data.replace('select_table_', '')
     
+    await callback.answer()
     await callback.message.edit_text(
         f"Выберите действие с таблицей:",
         reply_markup=table_actions(table_name)
     )
-    await callback.answer()
 
 @router.callback_query(lambda c: c.data == 'back_to_tables_selection')
 async def back_to_tables(callback: types.CallbackQuery):
     """Возврат к выбору таблицы"""
+    await callback.answer()
     await show_data_tables(callback)
 
 @router.callback_query(lambda c: c.data == 'back_to_manager_menu')
 async def back_to_menu(callback: types.CallbackQuery):
     """Возврат в главное меню менеджера"""
+    await callback.answer()
     await show_manager_menu(callback)
 
 @router.callback_query(lambda c: c.data.startswith('sync_db_to_sheets_'))
@@ -176,6 +181,7 @@ async def start_sync_data_to_sheet(callback: types.CallbackQuery):
 async def start_create_batch(callback: types.CallbackQuery, state: FSMContext):
     """Начало процесса создания пачки"""
     await state.set_state(ManagerStates.waiting_for_batch_type)
+    await callback.answer()
     await callback.message.edit_text(
         "Введите тип пачки:",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
@@ -183,19 +189,18 @@ async def start_create_batch(callback: types.CallbackQuery, state: FSMContext):
              InlineKeyboardButton(text="Образец", callback_data="batch_type_образец")]
         ])
     )
-    await callback.answer()
 
 @router.callback_query(lambda c: c.data.startswith('batch_type_'))
 async def process_batch_type_selection(callback: types.CallbackQuery, state: FSMContext):
     """Обработка выбора типа пачки"""
     batch_type = callback.data.split('_')[2]  # Получаем тип пачки из callback_data
     await state.update_data(batch_type=batch_type)
+    await callback.answer()
     await callback.message.edit_text(
         "Введите название проекта:",
         reply_markup=cancel_button_manager()
     )
     await state.set_state(ManagerStates.waiting_for_project_name)
-    await callback.answer()
 
 @router.message(ManagerStates.waiting_for_project_name)
 async def manager_process_project_name(message: types.Message, state: FSMContext):
@@ -331,6 +336,7 @@ async def manager_go_back_step(callback: types.CallbackQuery, state: FSMContext)
     if current_state == ManagerStates.waiting_for_product_name.state:
         # Возврат к вводу названия проекта
         await state.set_state(ManagerStates.waiting_for_project_name)
+        await callback.answer()
         await callback.message.edit_text(
             "Введите название проекта:",
             reply_markup=cancel_button_manager()
@@ -338,6 +344,7 @@ async def manager_go_back_step(callback: types.CallbackQuery, state: FSMContext)
     elif current_state == ManagerStates.waiting_for_color.state:
         # Возврат к вводу названия изделия
         await state.set_state(ManagerStates.waiting_for_product_name)
+        await callback.answer()
         await callback.message.edit_text(
             "Введите название изделия:",
             reply_markup=back_cancel_keyboard("manager_back_step", "cancel_manager")
@@ -345,6 +352,7 @@ async def manager_go_back_step(callback: types.CallbackQuery, state: FSMContext)
     elif current_state == ManagerStates.waiting_for_size.state:
         # Возврат к вводу цвета изделия
         await state.set_state(ManagerStates.waiting_for_color)
+        await callback.answer()
         await callback.message.edit_text(
             "Введите цвет изделия:",
             reply_markup=back_cancel_keyboard("manager_back_step", "cancel_manager")
@@ -352,6 +360,7 @@ async def manager_go_back_step(callback: types.CallbackQuery, state: FSMContext)
     elif current_state == ManagerStates.waiting_for_quantity.state:
         # Возврат к вводу размера изделия
         await state.set_state(ManagerStates.waiting_for_size)
+        await callback.answer()
         await callback.message.edit_text(
             "Введите размер изделия:",
             reply_markup=back_cancel_keyboard("manager_back_step", "cancel_manager")
@@ -359,6 +368,7 @@ async def manager_go_back_step(callback: types.CallbackQuery, state: FSMContext)
     elif current_state == ManagerStates.waiting_for_qr.state:
         # Возврат в меню менеджера
         await state.clear()
+        await callback.answer()
         await callback.message.edit_text(
             "Проверка пачки отменена",
             reply_markup=manager_menu()
@@ -366,6 +376,7 @@ async def manager_go_back_step(callback: types.CallbackQuery, state: FSMContext)
     else:
         # Если состояние не определено, просто отменяем операцию
         await state.clear()
+        await callback.answer()
         await callback.message.edit_text(
             "Операция отменена",
             reply_markup=manager_menu()
@@ -377,23 +388,41 @@ async def manager_go_back_step(callback: types.CallbackQuery, state: FSMContext)
 async def start_check_batch(callback: types.CallbackQuery, state: FSMContext):
     """Начало процесса проверки пачки"""
     await state.set_state(ManagerStates.waiting_for_qr)
-    await callback.message.edit_text(
-        "Пожалуйста, отправьте фото QR-кода пачки или текст с ID пачки",
-        reply_markup=back_cancel_keyboard("manager_back_step", "cancel_manager")
-    )
     await callback.answer()
+    await callback.message.edit_text(
+        "Пожалуйста, отправьте фото QR-кода пачки",
+        reply_markup=cancel_button_manager()
+    )
 
 @router.message(ManagerStates.waiting_for_qr, F.photo)
 async def process_batch_qr_photo(message: types.Message, state: FSMContext):
     """Обработка фотографии QR-кода пачки"""
     try:
         # Получаем фотографию с наивысшим разрешением
-        photo = message.photo[-1]
-        file_info = await message.bot.get_file(photo.file_id)
-        downloaded_file = await message.bot.download_file(file_info.file_path)
+        # Заменяем проблемную строку с json-сериализацией
+        logger.debug("Received message: %s", message.model_dump_json())
         
-        # Обрабатываем QR-код
-        batch_id = await process_qr_code(downloaded_file)
+        # Проверяем вложение фото
+        if message.photo:
+            photo = message.photo[-1]
+        elif message.document and message.document.mime_type.startswith('image/'):
+            photo = message.document
+        else:
+            await message.answer("❌ Отправьте изображение как фото!")
+            return
+        
+        file = await message.bot.get_file(photo.file_id)
+        image_data = await message.bot.download_file(file.file_path)
+
+        try:
+            qr_text = await process_qr_code(image_data.read())
+            print(f"Decoded QR: {qr_text}")
+        except Exception as decode_error:
+            await message.answer("❌ Не удалось прочитать QR-код. Убедитесь что:")
+            await message.answer("- Фото хорошо освещено\n- QR-код в фокусе\n- Нет бликов")
+            raise decode_error
+        
+        batch_id = int(qr_text.split('ID:')[1].split('\n')[0].strip())
         
         if batch_id:
             # Если QR-код успешно прочитан
@@ -423,45 +452,53 @@ async def process_batch_id(message: types.Message, state: FSMContext, batch_id: 
         # Получаем информацию о пачке из базы данных
         async with db.execute(
             """
-            SELECT b.batch_id as id, b.project_nm as project_name, b.product_nm as product_name, 
-                   b.color, b.size, b.quantity, b.parts_count,
-                   b.status, b.created_at, b.updated_at, b.type,
-                   c.full_name as cutter_name
+            SELECT b.batch_id as id, b.project_nm as project_name, b.product_nm as product_name, \
+                   b.color, b.size, b.quantity, b.seamstress_id, b.parts_count,
+                   b.status, b.created_at, b.type,
+                   c.name as cutter_name
             FROM batches b
-            LEFT JOIN employees c ON b.cutter_id = c.id
+            LEFT JOIN employees c ON b.cutter_id = c.tg_id
             WHERE b.batch_id = ?
             """,
             (batch_id,)
         ) as cursor:
-            batch = await cursor.fetchone()
+            batch_data = await cursor.fetchone()
+
+        if not batch_data:
+            await message.answer("❌ Пачка не найдена")
+            await state.clear()
+            await show_manager_menu(message)
+            return
         
-        if batch:
-            # Форматируем дату и время для удобочитаемости
-            created_at = batch["created_at"].strftime("%d.%m.%Y %H:%M") if batch["created_at"] else "Н/Д"
-            updated_at = batch["updated_at"].strftime("%d.%m.%Y %H:%M") if batch["updated_at"] else "Н/Д"
-            
+        elif batch_data[8] == 'шьется' or batch_data[8] == 'создана' or batch_data[8] == 'переделка начата':
+            await message.answer("❌ Пачка еще не пошита")
+            await state.clear()
+            await show_manager_menu(message)
+            return
+        elif batch_data[8] == 'пошита' or batch_data[8] == 'переделка завершена':
+
+            await state.update_data(batch_data=batch_data)
+            await state.set_state(ManagerStates.confirm_batch)
+
             # Формируем сообщение с информацией о пачке
             batch_info = (
-                f"📦 <b>Информация о пачке #{batch['id']}</b>\n\n"
-                f"🏷 Проект: {batch['project_name']}\n"
-                f"👕 Изделие: {batch['product_name']}\n"
-                f"🎨 Цвет: {batch['color']}\n"
-                f"📏 Размер: {batch['size']}\n"
-                f"🔢 Количество: {batch['quantity']}\n"
-                f"📊 Количество деталей: {batch['parts_count']}\n"
-                f"👤 Раскройщик: {batch['cutter_name'] or 'Не указан'}\n"
-                f"📅 Создана: {created_at}\n"
-                f"🔄 Последнее обновление: {updated_at}\n"
-                f"📊 Статус: {batch['status']}\n"
-                f"🔄 Тип: {batch['type']}"
+                f"📦 <b>Информация о пачке #{batch_data['id']}</b>\n\n"
+                f"🏷 Проект: {batch_data['project_name']}\n"
+                f"👕 Изделие: {batch_data['product_name']}\n"
+                f"🎨 Цвет: {batch_data['color']}\n"
+                f"📏 Размер: {batch_data['size']}\n"
+                f"🔢 Количество: {batch_data['quantity']}\n"
+                f"📊 Количество деталей: {batch_data['parts_count']}\n"
+                f"👤 Раскройщик: {batch_data['cutter_name'] or 'Не указан'}\n"
+                f"📅 Создана: {batch_data['created_at']}\n"
+                f"📊 Статус: {batch_data['status']}\n"
+                f"🔄 Тип: {batch_data['type']}"
             )
-            
+
             # Отправляем информацию о пачке
             await message.answer(batch_info, parse_mode="HTML")
             
-            # Возвращаемся в главное меню
-            await state.clear()
-            await message.answer("Проверка пачки завершена", reply_markup=manager_menu())
+            await message.answer("Проверка пачки завершена", reply_markup=manager_batch_decision())
         else:
             # Если пачка не найдена
             await message.answer(
@@ -469,18 +506,79 @@ async def process_batch_id(message: types.Message, state: FSMContext, batch_id: 
                 reply_markup=back_cancel_keyboard("manager_back_step", "cancel_manager")
             )
     except Exception as e:
-        logger.error(f"Error processing batch ID: {str(e)}")
-        await message.answer(
-            "Произошла ошибка при получении информации о пачке. Пожалуйста, попробуйте еще раз.",
-            reply_markup=back_cancel_keyboard("manager_back_step", "cancel_manager")
-        )
+        logger.error("QR processing failed: %s", traceback.format_exc())
+        await message.answer("❌ Ошибка обработки QR-кода. Попробуйте еще раз!", reply_markup=cancel_button_manager())
+        await state.set_state(ManagerStates.waiting_for_qr)
 
-@router.callback_query(lambda c: c.data == "cancel_manager")
-async def cancel_manager_operation(callback: types.CallbackQuery, state: FSMContext):
-    """Отмена текущей операции менеджера и возврат в меню"""
-    await state.clear()
-    await callback.message.edit_text("Операция отменена", reply_markup=manager_menu())
-    await callback.answer()
+@router.callback_query(ManagerStates.confirm_batch)
+async def handle_batch_decision(callback: types.CallbackQuery, state: FSMContext):
+    try:
+        data = await state.get_data()
+        batch_id = data.get('batch_data')[0]
+        seamstress_id = data.get('batch_data')[6]
+        user_id = callback.from_user.id
+        msg = "Действие отменено"
+        
+        if not batch_id:
+            await callback.answer("❌ Ошибка: пачка не найдена")
+            return
+
+        action = callback.data.split('_')[-1]
+        
+        if action == "approve":
+            async with db.execute(
+                """UPDATE batches \
+                SET status = 'готово', \
+                    controller_id = ?, \
+                    control_dttm = CURRENT_TIMESTAMP \
+                WHERE batch_id = ?""",
+                (user_id, batch_id)
+            ) as cursor:
+                await db.fetchall(cursor)
+            msg = "✅ Пачка успешно принята!"
+            
+        elif action == "reject":
+            async with db.execute(
+                """UPDATE batches \
+                SET status = 'неисправимый брак', \
+                    controller_id = ?, \
+                    control_dttm = CURRENT_TIMESTAMP \
+                WHERE batch_id = ?""",
+                (user_id, batch_id)
+            ) as cursor:
+                await db.fetchall(cursor)
+            msg = "❌ Пачка помечена как брак!"
+            
+        elif action == "remake":
+            async with db.execute(
+                """UPDATE batches \
+                SET status = 'брак на переделке', \
+                    controller_id = ?, \
+                    control_dttm = CURRENT_TIMESTAMP \
+                WHERE batch_id = ?""",
+                (user_id, batch_id)
+            ) as cursor:
+                await db.fetchall(cursor)
+            msg = "🔄 Пачка отправлена на переделку"
+
+            if seamstress_id:
+                await bot.send_message(
+                    chat_id=seamstress_id,
+                    text=f"⚠️ Пачка {batch_id} требует переделки!\n"
+                         "Пожалуйста, заберите ее из зоны контроля.",
+                    reply_markup=seamstress_menu()
+                )
+            msg = "🔄 Пачка отправлена на переделку"
+
+        await callback.message.edit_reply_markup(reply_markup=None)
+        await callback.message.answer(msg)
+        await state.clear()
+        await new_manager_menu(callback)
+    except Exception as e:
+        logger.error(f"Batch decision error: {traceback.format_exc()}")
+        await callback.answer("⚠️ Произошла ошибка при обработке")
+    finally:
+        await callback.answer()
 
 @router.callback_query(lambda c: c.data == 'manager_payments')
 async def show_employee_payments(callback: types.CallbackQuery):
@@ -504,7 +602,7 @@ async def show_employee_payments(callback: types.CallbackQuery):
 @router.callback_query(lambda c: c.data.startswith('pay_'))
 async def process_employee_selection(callback: types.CallbackQuery, state: FSMContext):
     employee_id = int(callback.data.split('_')[1])
-    await callback.message.edit_text("Введите сумму выплаты:", reply_markup=cancel_button_manager("manager_back_step", "cancel_manager"))
+    await callback.message.edit_text("Введите сумму выплаты:", reply_markup=cancel_button_manager())
     
     # Сохраняем выбранного сотрудника в состоянии
     await state.update_data(employee_id=employee_id)
@@ -534,3 +632,4 @@ async def process_payment_amount(message: types.Message, state: FSMContext):
         await message.answer(f"Ошибка при добавлении выплаты: {str(e)}")
         await state.clear()
         await show_manager_menu(message)
+

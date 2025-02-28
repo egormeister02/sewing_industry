@@ -79,7 +79,7 @@ class GoogleSheetsManager:
             await self._execute_api_call(
                 self.sheets.values().clear,
                 spreadsheetId=SPREADSHEET_ID,
-                range=f"{sheet_name}!A:O",
+                range=f"{sheet_name}!A:R",
                 body={}
             )
             return
@@ -394,7 +394,7 @@ class GoogleSheetsManager:
                     
                     if dt:
                         # Форматируем для Google Sheets
-                        formatted_data[col_en] = dt.strftime("%d.%m.%Y %H:%M")
+                        formatted_data[col_en] = dt.strftime("%Y-%m-%d %H:%M:%S")
                     else:
                         formatted_data[col_en] = ''
                 else:

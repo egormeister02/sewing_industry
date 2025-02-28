@@ -82,6 +82,18 @@ def controller_batch_decision():
         ]
     ])
 
+def manager_batch_decision():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="✅ Принять", callback_data="manager_batch_approve"),
+            InlineKeyboardButton(text="❌ Брак", callback_data="manager_batch_reject")
+        ],
+        [
+            InlineKeyboardButton(text="🔄 На переделку", callback_data="manager_batch_remake"),
+            InlineKeyboardButton(text="⏪ Отмена", callback_data="cancel_manager")
+        ]
+    ])
+
 def cancel_button_manager():
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="Отмена", callback_data="cancel_manager")]
