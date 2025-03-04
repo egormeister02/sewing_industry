@@ -81,8 +81,8 @@ async def process_registration_name(message: types.Message, state: FSMContext):
         # Отправка уведомления менеджеру
         from app.credentials import MANAGERS_ID
         if MANAGERS_ID:
-            manager_id = MANAGERS_ID[0]
-            await bot.send_message(
+            for manager_id in MANAGERS_ID:
+                await bot.send_message(
                 chat_id=manager_id,
                 text=f"⚠️ Новая регистрация:\n\n"
                      f"ID: {user_id}\n"

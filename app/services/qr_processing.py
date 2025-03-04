@@ -52,7 +52,8 @@ async def generate_qr_code(data: dict) -> bytes:
         
         # Сохраняем изображение в байтовый массив
         img_byte_array = BytesIO()
-        await loop.run_in_executor(None, img_print.save, img_byte_array, 'PNG')
+        await loop.run_in_executor(None, img_print.rotate, 90)
+        await loop.run_in_executor(None, img_print.save, img_byte_array, 'PDF')
         return img_byte_array.getvalue()
         
     except Exception as e:
