@@ -10,7 +10,7 @@ def role_keyboard():
 
 def manager_menu():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="Данные", callback_data="manager_data")],
+        [InlineKeyboardButton(text="Синхронизация", callback_data="manager_data")],
         [InlineKeyboardButton(text="Выплаты", callback_data="manager_payments")],
         [InlineKeyboardButton(text="Создать пачку", callback_data="manager_create_batch")],
         [InlineKeyboardButton(text="Проверка пачки", callback_data="manager_check_batch")],

@@ -35,11 +35,12 @@ async def generate_qr_code(data: dict) -> bytes:
         # Переводим размеры в пиксели (предположим, что 1 см = 37.8 пикселей)
         width_px = int(4 * 37.8)
         height_px = int(6 * 37.8)
-        img_print = Image.new('RGB', (width_px, height_px), 'white')
+        img_print = Image.new('RGB', (height_px, height_px), 'white')
         
         # Вставляем QR-код в верхнюю часть изображения
         qr_size = round(width_px * 0.8)
         img_qr = img_qr.resize((qr_size, qr_size))
+
         img_print.paste(img_qr, ((width_px - qr_size) // 2, 10))
         
         # Добавляем текст под QR-кодом
@@ -49,10 +50,12 @@ async def generate_qr_code(data: dict) -> bytes:
         for line in qr_data.split('\n'):
             draw.text((10, text_y), line, fill='black', font=font)
             text_y += 14  # Отступ между строками
+    
+        img_print = img_print.rotate(90)   # Поворачиваем изображение на 90 градусов  
+        img_print = img_print.crop((0, height_px - width_px, height_px, height_px))
         
         # Сохраняем изображение в байтовый массив
         img_byte_array = BytesIO()
-        await loop.run_in_executor(None, img_print.rotate, 90)
         await loop.run_in_executor(None, img_print.save, img_byte_array, 'PDF')
         return img_byte_array.getvalue()
         
