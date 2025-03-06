@@ -8,6 +8,8 @@ from app.database import init_db, db
 from app.credentials import WEBHOOK_URL, MANAGERS_ID
 from app.bot import bot
 from app.services.update_from_sheets import handle_google_sheets_update
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from aiogram.exceptions import TelegramAPIError
 # Настройка логирования
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -22,6 +24,19 @@ dp.include_router(manager.router)
 dp.include_router(seamstress.router)
 dp.include_router(cutter.router)
 dp.include_router(controller.router)
+
+# Настройка планировщика
+scheduler = AsyncIOScheduler()
+
+def start_scheduler():
+    # Запланировать выполнение функции full_sync каждый день в 4:00
+    scheduler.add_job(
+        func=lambda: asyncio.create_task(db.sheets.full_sync()),
+        trigger='cron',
+        hour=4,
+        minute=0
+    )
+    scheduler.start()
 
 # Вместо прямого вызова db.connect()
 async def update_managers_in_db():
@@ -40,7 +55,12 @@ async def update_managers_in_db():
     except Exception as e:
         logger.error(f"Критическая ошибка: {str(e)}")
         raise
-
+async def set_commands():
+    await bot.set_my_commands(
+        [
+            types.BotCommand(command="/start", description="Меню")
+        ]
+    )
 @app.before_serving
 async def startup():
     db_instance = await init_db()  # Получаем инициализированный экземпляр БД
@@ -53,6 +73,7 @@ async def startup():
     await bot.delete_webhook()
     await bot.set_webhook(f"{WEBHOOK_URL}/webhook")
 
+    await set_commands()
     logger.info("Настройка Google Sheets")
     async with db.execute("""SELECT name FROM sqlite_master WHERE type='table'
                            AND name NOT LIKE 'sqlite_%' 
@@ -61,6 +82,9 @@ async def startup():
         for table in tables:
             await db.sheets.initialize_sheet(table)
     await db.sheets.full_sync()
+
+    # Запуск планировщика
+    start_scheduler()
 
 @app.route('/webhook', methods=['POST'])
 async def webhook_handler():
@@ -80,7 +104,6 @@ async def webhook_handler():
     except Exception as e:
         logger.error(f"Webhook error: {str(e)}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
-
 
 if __name__ == '__main__':
     from hypercorn.config import Config

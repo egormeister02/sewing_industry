@@ -1,4 +1,4 @@
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
 from app.services.dictionary import TABLE_TRANSLATIONS
 
 def role_keyboard():
@@ -154,3 +154,4 @@ def back_cancel_keyboard(back_callback: str = "back_step", cancel_callback: str 
             InlineKeyboardButton(text="❌ Отмена", callback_data=cancel_callback)
         ]
     ])
+
