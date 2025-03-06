@@ -1,12 +1,14 @@
 import ssl
 import asyncio
 import logging
+from datetime import datetime
 logger = logging.getLogger(__name__)
 from app.database import db
 from app.services.dictionary import TABLE_TRANSLATIONS, COLUMN_TRANSLATIONS
 from app.credentials import MANAGERS_ID
 from app.bot import bot
 from app.keyboards.inline import change_google_sheet
+import re
 # Конфигурация повторных попыток
 MAX_RETRIES = 3
 RETRY_DELAY = 2  # секунды
@@ -222,6 +224,23 @@ async def sync_db_to_sheets(table_name: str):
                     if len(row) < len(headers):
                         row.extend([''] * (len(headers) - len(row)))
                     record = {headers[i]: value.strip() if isinstance(value, str) else value for i, value in enumerate(row) if i < len(headers)}
+                    for key, value in record.items():
+                        if isinstance(value, str) and re.match(r'^\d{2}\.\d{2}\.\d{4}(\s\d{1,2}:\d{2}(:\d{2})?)?$', value):
+                            try:
+                                # Разделяем дату и время
+                                date_part, *time_part = value.split()
+                                dt = datetime.strptime(date_part, "%d.%m.%Y")
+                                
+                                # Устанавливаем время
+                                if time_part:
+                                    time_str = time_part[0]
+                                    dt = datetime.strptime(f"{date_part} {time_str}", "%d.%m.%Y %H:%M:%S" if len(time_part[0]) > 5 else "%d.%m.%Y %H:%M")
+                                else:
+                                    dt = dt.replace(hour=0, minute=0, second=0)  # Устанавливаем нули, если время не указано
+                                
+                                record[key] = dt.strftime("%Y-%m-%d %H:%M:%S")  # Преобразуем в нужный формат
+                            except ValueError:
+                                record[key] = None  # Или любое другое значение по умолчанию
                     sheet_records.append(record)
         else:
             sheet_records = []
@@ -275,7 +294,7 @@ async def sync_db_to_sheets(table_name: str):
         success_inserts = 0
         success_updates = 0
         success_deletes = 0
-        
+
         # Вставка новых записей
         for item in to_insert:
             try:

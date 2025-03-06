@@ -602,9 +602,19 @@ async def show_employee_payments(callback: types.CallbackQuery):
 @router.callback_query(lambda c: c.data.startswith('pay_'))
 async def process_employee_selection(callback: types.CallbackQuery, state: FSMContext):
     employee_id = int(callback.data.split('_')[1])
-    await callback.message.edit_text("Введите сумму выплаты:", reply_markup=cancel_button_manager())
-    
-    # Сохраняем выбранного сотрудника в состоянии
+    # Получаем информацию о сотруднике из базы данных
+    async with db.execute(
+        "SELECT name, total_pay, total_payments FROM employee_payment_info WHERE tg_id = ?",
+        (employee_id,)
+    ) as cursor:
+        employee_info = await cursor.fetchone()
+    total_pay = employee_info['total_pay']
+    total_payments = employee_info['total_payments']
+    amount_due = total_pay - total_payments
+    await callback.message.edit_text(
+        f"Сотрудник: {employee_info['name']}\nОжидаемая сумма: {amount_due}\nВведите сумму выплаты:",
+        reply_markup=cancel_button_manager()
+    )
     await state.update_data(employee_id=employee_id)
     await state.set_state(ManagerStates.waiting_for_payment_amount)
     await callback.answer()

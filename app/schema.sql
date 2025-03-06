@@ -64,18 +64,28 @@ SELECT
     e.tg_id,
     e.name,
     e.job,
-    COALESCE(SUM(p.amount), 0) AS total_payments,
-    COALESCE(SUM(CASE WHEN e.job = 'швея' THEN b.seamstress_pay ELSE b.cutter_pay END), 0) AS total_pay
+    COALESCE(p.total_payments, 0) AS total_payments,
+    COALESCE(b.total_pay, 0) AS total_pay
 FROM 
     employees e
 LEFT JOIN 
-    payments p ON e.tg_id = p.employee_id
+    (SELECT employee_id, SUM(amount) AS total_payments 
+     FROM payments 
+     GROUP BY employee_id) p ON e.tg_id = p.employee_id
 LEFT JOIN 
-    batches b ON e.tg_id = b.cutter_id OR e.tg_id = b.seamstress_id
+    (SELECT 
+        e.tg_id tg_id, 
+        SUM(CASE WHEN e.job = 'швея' THEN b.seamstress_pay * b.quantity ELSE b.cutter_pay * b.quantity * b.parts_count END) AS total_pay 
+     FROM 
+        employees e
+    LEFT JOIN 
+        batches b ON e.tg_id = b.cutter_id OR e.tg_id = b.seamstress_id
+    WHERE 
+        e.job IN ('швея', 'раскройщик')
+    GROUP BY 
+        e.tg_id) b ON e.tg_id = b.tg_id
 WHERE 
-    e.job IN ('швея', 'раскройщик')
-GROUP BY 
-    e.tg_id, e.name, e.job;
+    e.job IN ('швея', 'раскройщик');
 
 CREATE TABLE IF NOT EXISTS employees_audit (
     audit_id INTEGER PRIMARY KEY AUTOINCREMENT,

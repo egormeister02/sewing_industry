@@ -73,56 +73,48 @@ async def create_batch_start(callback: types.CallbackQuery, state: FSMContext):
     )
 
 # Обработчик кнопки "Назад"
-@router.callback_query(lambda c: c.data == 'back_step')
+@router.callback_query(lambda c: c.data == 'cutter_back_step')
 async def go_back_step(callback: types.CallbackQuery, state: FSMContext):
-    """Обработчик кнопки 'Назад' - возврат к предыдущему шагу"""
+    # Получаем текущее состояние
     current_state = await state.get_state()
-    data = await state.get_data()
-    
+    # Возвращаем на предыдущий шаг в зависимости от текущего состояния
     if current_state == CutterStates.waiting_for_product_name:
-        # Возврат к вводу названия проекта
-        await state.set_state(CutterStates.waiting_for_project_name)
         await callback.message.edit_text(
             "Введите название проекта:",
             reply_markup=cancel_button_cutter()
         )
+        await state.set_state(CutterStates.waiting_for_project_name)
+
     elif current_state == CutterStates.waiting_for_color:
-        # Возврат к вводу названия изделия
-        await state.set_state(CutterStates.waiting_for_product_name)
         await callback.message.edit_text(
             "Введите название изделия:",
-            reply_markup=back_cancel_keyboard("back_step", "cancel_cutter")
+            reply_markup=back_cancel_keyboard("cutter_back_step", "cancel_cutter")
         )
+        await state.set_state(CutterStates.waiting_for_product_name)
+
     elif current_state == CutterStates.waiting_for_size:
-        # Возврат к вводу цвета изделия
-        await state.set_state(CutterStates.waiting_for_color)
         await callback.message.edit_text(
             "Введите цвет изделия:",
-            reply_markup=back_cancel_keyboard("back_step", "cancel_cutter")
+            reply_markup=back_cancel_keyboard("cutter_back_step", "cancel_cutter")
         )
+        await state.set_state(CutterStates.waiting_for_color)
+
     elif current_state == CutterStates.waiting_for_quantity:
-        # Возврат к вводу размера изделия
-        await state.set_state(CutterStates.waiting_for_size)
         await callback.message.edit_text(
             "Введите размер изделия:",
-            reply_markup=back_cancel_keyboard("back_step", "cancel_cutter")
+            reply_markup=back_cancel_keyboard("cutter_back_step", "cancel_cutter")
         )
+        await state.set_state(CutterStates.waiting_for_size)
+
     elif current_state == CutterStates.waiting_for_parts_count:
-        # Возврат к вводу количества изделий
-        await state.set_state(CutterStates.waiting_for_quantity)
         await callback.message.edit_text(
             "Введите количество изделий в пачке:",
-            reply_markup=back_cancel_keyboard("back_step", "cancel_cutter")
+            reply_markup=back_cancel_keyboard("cutter_back_step", "cancel_cutter")
         )
+        await state.set_state(CutterStates.waiting_for_quantity)
+
     else:
-        # Если состояние не определено, просто отменяем операцию
-        await state.clear()
-        await callback.message.edit_text(
-            "Операция отменена",
-            reply_markup=cutter_menu()
-        )
-    
-    await callback.answer()
+        await show_cutter_menu(callback)
 
 @router.message(CutterStates.waiting_for_project_name)
 async def process_project_name(message: types.Message, state: FSMContext):
@@ -136,7 +128,7 @@ async def process_project_name(message: types.Message, state: FSMContext):
     try:
         await message.answer(
             "Введите название изделия:",
-            reply_markup=back_cancel_keyboard("back_step", "cancel_cutter")
+            reply_markup=back_cancel_keyboard("cutter_back_step", "cancel_cutter")
         )
     except Exception as e:
         await message.answer(
@@ -151,7 +143,7 @@ async def process_product_name(message: types.Message, state: FSMContext):
     await state.update_data(product_name=message.text)
     await state.set_state(CutterStates.waiting_for_color)
     await message.answer("Введите цвет изделия:",
-        reply_markup=back_cancel_keyboard("back_step", "cancel_cutter")
+        reply_markup=back_cancel_keyboard("cutter_back_step", "cancel_cutter")
     )
 
 @router.message(CutterStates.waiting_for_color)
@@ -160,7 +152,7 @@ async def process_color(message: types.Message, state: FSMContext):
     await state.update_data(color=message.text)
     await state.set_state(CutterStates.waiting_for_size)
     await message.answer("Введите размер изделия:",
-        reply_markup=back_cancel_keyboard("back_step", "cancel_cutter")
+        reply_markup=back_cancel_keyboard("cutter_back_step", "cancel_cutter")
     )
 
 @router.message(CutterStates.waiting_for_size)
@@ -169,7 +161,7 @@ async def process_size(message: types.Message, state: FSMContext):
     await state.update_data(size=message.text)
     await state.set_state(CutterStates.waiting_for_quantity)
     await message.answer("Введите количество изделий в пачке:",
-        reply_markup=back_cancel_keyboard("back_step", "cancel_cutter")
+        reply_markup=back_cancel_keyboard("cutter_back_step", "cancel_cutter")
     )
 
 @router.message(CutterStates.waiting_for_quantity)
@@ -180,11 +172,11 @@ async def process_quantity(message: types.Message, state: FSMContext):
         await state.update_data(quantity=quantity)
         await state.set_state(CutterStates.waiting_for_parts_count)
         await message.answer("Введите количество деталей в одном изделии:",
-        reply_markup=back_cancel_keyboard("back_step", "cancel_cutter")
+        reply_markup=back_cancel_keyboard("cutter_back_step", "cancel_cutter")
     )
     except ValueError:
         await message.answer("Пожалуйста, введите целое число:",
-        reply_markup=back_cancel_keyboard("back_step", "cancel_cutter")
+        reply_markup=back_cancel_keyboard("cutter_back_step", "cancel_cutter")
     )
 
 @router.message(CutterStates.waiting_for_parts_count)

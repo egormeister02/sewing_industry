@@ -367,6 +367,8 @@ class GoogleSheetsManager:
 
     async def sync_single_row(self, table_name: str, row_data: dict, action_type: str):
         """Синхронизация одной строки с учетом типа действия"""
+        if action_type == "DELETE":
+            return
         try:
             logger.info(f"Syncing single row for {row_data}")
             sheet_name = TABLE_TRANSLATIONS.get(table_name, table_name)
@@ -394,7 +396,7 @@ class GoogleSheetsManager:
                     
                     if dt:
                         # Форматируем для Google Sheets
-                        formatted_data[col_en] = dt.strftime("%Y-%m-%d %H:%M:%S")
+                        formatted_data[col_en] = dt.strftime("%d.%m.%Y %H:%M:%S")
                     else:
                         formatted_data[col_en] = ''
                 else:
@@ -473,9 +475,14 @@ class GoogleSheetsManager:
     async def sync_data_to_sheet(self, table_name: str) -> None:
         """Синхронизация данных с предварительной очисткой листа"""
         # Переводим название таблицы на русский
+        
         sheet_name = TABLE_TRANSLATIONS.get(table_name, table_name)
         
-        
+        await self._execute_api_call(
+            self.sheets.values().clear,
+            spreadsheetId=SPREADSHEET_ID,
+            range=f"{sheet_name}!A2:R"
+        )
         # Получаем типы колонок и маппинг
         column_types = await self._get_column_types(table_name)
         column_mapping = COLUMN_TRANSLATIONS.get(table_name, {})
@@ -491,9 +498,9 @@ class GoogleSheetsManager:
             for idx, (col_name, value) in enumerate(zip(column_mapping.keys(), row)):
                 if column_types.get(col_name) == 'DATETIME':
                     if isinstance(value, datetime):
-                        converted_value = value.strftime("%d.%m.%Y %H:%M")
+                        converted_value = value.strftime("%d.%m.%Y %H:%M:%S")
                     elif isinstance(value, str):
-                        converted_value = datetime.fromisoformat(value).strftime("%d.%m.%Y %H:%M")
+                        converted_value = datetime.fromisoformat(value).strftime("%d.%m.%Y %H:%M:%S")
                     else:
                         converted_value = ""
                 else:
