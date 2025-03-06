@@ -14,6 +14,7 @@ def manager_menu():
         [InlineKeyboardButton(text="Выплаты", callback_data="manager_payments")],
         [InlineKeyboardButton(text="Создать пачку", callback_data="manager_create_batch")],
         [InlineKeyboardButton(text="Проверка пачки", callback_data="manager_check_batch")],
+        [InlineKeyboardButton(text="Заявка на ремонт", callback_data="repair")]
     ])
 
 def approval_keyboard(user_id: int):
