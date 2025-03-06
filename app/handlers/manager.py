@@ -583,21 +583,37 @@ async def handle_batch_decision(callback: types.CallbackQuery, state: FSMContext
 @router.callback_query(lambda c: c.data == 'manager_payments')
 async def show_employee_payments(callback: types.CallbackQuery):
     # Получаем всех сотрудников (раскройщиков и швей)
-    async with db.execute(
-        "SELECT tg_id, name FROM employees WHERE job IN ('раскройщик', 'швея')"
-    ) as cursor:
-        employees = await cursor.fetchall()
-
-    # Создаем клавиатуру с кнопками для каждого сотрудника
     buttons = [
-        [InlineKeyboardButton(text=employee['name'], callback_data=f'pay_{employee["tg_id"]}')]
-        for employee in employees
+        [InlineKeyboardButton(text="Швея", callback_data="select_швея")],
+        [InlineKeyboardButton(text="Раскройщик", callback_data="select_раскройщик")],
+        [InlineKeyboardButton(text="Назад", callback_data="cancel_manager")]
     ]
-    buttons.append([InlineKeyboardButton(text="Назад", callback_data="cancel_manager")])
     keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
 
-    await callback.message.edit_text("Выберите сотрудника для выплаты:", reply_markup=keyboard)
+    await callback.message.edit_text("Выберите должность работника:", reply_markup=keyboard)
     await callback.answer()
+
+@router.callback_query(lambda c: c.data.startswith('select_'))
+async def process_role_selection(callback: types.CallbackQuery, state: FSMContext):
+    role = callback.data.split('_')[1]
+    # Получаем сотрудников в зависимости от выбранной роли
+    async with db.execute(
+        "SELECT tg_id, name FROM employees WHERE job = ?",
+        (role,)
+    ) as cursor:
+        employees = await cursor.fetchall()
+    if employees:
+        buttons = [
+            [InlineKeyboardButton(text=employee['name'], callback_data=f'pay_{employee['tg_id']}')] for employee in employees
+        ]
+        buttons.append([InlineKeyboardButton(text="Назад", callback_data="cancel_manager")])
+        keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
+
+        await callback.message.edit_text("Выберите сотрудника для выплаты:", reply_markup=keyboard)
+        await callback.answer()
+    else:
+        await callback.message.edit_text("Нет сотрудников для выплаты", reply_markup=manager_menu())
+        await callback.answer()
 
 @router.callback_query(lambda c: c.data.startswith('pay_'))
 async def process_employee_selection(callback: types.CallbackQuery, state: FSMContext):
