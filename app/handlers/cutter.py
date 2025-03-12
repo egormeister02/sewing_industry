@@ -224,7 +224,7 @@ async def process_parts_count(message: types.Message, state: FSMContext):
         # Отправляем PDF файл пользователю
         await message.answer_document(
             document=qr_input_file,
-            caption='Ваш QR код в формате PDF'
+            caption=f"✅ Пачка #{batch_id} создана!\nQR-код для работы:"
         )
         await show_cutter_menu(message)
         await state.clear()

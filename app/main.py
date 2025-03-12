@@ -1,3 +1,6 @@
+import os
+os.environ['TZ'] = 'Europe/Moscow'
+
 from quart import Quart, request, jsonify
 from aiogram import Dispatcher, types
 from aiogram.fsm.storage.memory import MemoryStorage

@@ -303,13 +303,14 @@ async def process_parts_count(message: types.Message, state: FSMContext):
         file_object = BytesIO(qr_image)
         qr_input_file = BufferedInputFile(
             file_object.getvalue(), 
-            filename=f'batch_{batch_id}_qr.png'
+            filename=f'batch_{batch_id}_qr.pdf'
         )
         
-        await message.answer_photo(
-            photo=qr_input_file,
+        await message.answer_document(
+            document=qr_input_file,
             caption=f"✅ Пачка #{batch_id} создана!\nQR-код для работы:"
         )
+
         await message.answer(
             "Меню менеджера:",
             reply_markup=manager_menu()
