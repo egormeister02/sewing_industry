@@ -82,16 +82,15 @@ async def process_registration_name(message: types.Message, state: FSMContext):
         from app.credentials import MANAGERS_ID
         if MANAGERS_ID:
             for manager_id in MANAGERS_ID:
-                await bot.send_message(
-                chat_id=manager_id,
-                text=f"⚠️ Новая регистрация:\n\n"
-                     f"ID: {user_id}\n"
-                     f"Имя: {data['name']}\n"
-                     f"Должность: {data['job']}\n\n"
-                     f"Подтвердить регистрацию?",
-                reply_markup=approval_keyboard(user_id)
-            )
-        menu_func = await get_menu_function(data['job'])
+                    await bot.send_message(
+                    chat_id=manager_id,
+                    text=f"⚠️ Новая регистрация:\n\n"
+                    f"ID: {user_id}\n"
+                    f"Имя: {data['name']}\n"
+                    f"Должность: {data['job']}\n\n"
+                    f"Подтвердить регистрацию?",
+                    reply_markup=approval_keyboard(user_id)
+                )
         await message.answer("✅ Заявка отправлена менеджеру. Ожидайте подтверждения.",
                               reply_markup=None)      # на время разработки показывается меню должности
         await state.clear()
