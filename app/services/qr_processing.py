@@ -45,7 +45,7 @@ async def generate_qr_code(data: dict) -> bytes:
         
         # Добавляем текст под QR-кодом
         draw = ImageDraw.Draw(img_print)
-        font = ImageFont.truetype("fonts/Arial.TTF", size=14) # Используем стандартный шрифт
+        font = ImageFont.truetype("fonts/DejaVuSans.ttf", size=14) # Используем стандартный шрифт
         text_y = qr_size + 14
         for line in qr_data.split('\n'):
             draw.text((10, text_y), line, fill='black', font=font)
