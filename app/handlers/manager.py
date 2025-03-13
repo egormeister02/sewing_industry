@@ -417,13 +417,13 @@ async def process_batch_qr_photo(message: types.Message, state: FSMContext):
 
         try:
             qr_text = await process_qr_code(image_data.read())
-            print(f"Decoded QR: {qr_text}")
+            logger.info(f"Decoded QR: {qr_text}")
         except Exception as decode_error:
             await message.answer("❌ Не удалось прочитать QR-код. Убедитесь что:")
             await message.answer("- Фото хорошо освещено\n- QR-код в фокусе\n- Нет бликов")
             raise decode_error
         
-        batch_id = int(qr_text.split('ID:')[1].split('\n')[0].strip())
+        batch_id = int(qr_text)
         
         if batch_id:
             # Если QR-код успешно прочитан

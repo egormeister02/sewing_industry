@@ -25,7 +25,7 @@ async def generate_qr_code(data: dict) -> bytes:
             f"Количество: {data['quantity']}"
         )
         
-        qr.add_data(qr_data)
+        qr.add_data(data['batch_id'])
         qr.make(fit=True)
         
         loop = asyncio.get_event_loop()
