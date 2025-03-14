@@ -70,7 +70,7 @@ async def show_seamstress_data(callback: types.CallbackQuery):
 async def take_batch_start(callback: types.CallbackQuery, state: FSMContext):
     await state.set_state(SeamstressStates.waiting_for_qr)
     await callback.message.edit_text(
-        "📤 Отправьте фото QR-кода пачки",
+        "📤 Отправьте фото QR-кода пачки или id пачки",
         reply_markup=cancel_button_seamstress()
     )
     await callback.answer()
@@ -78,38 +78,35 @@ async def take_batch_start(callback: types.CallbackQuery, state: FSMContext):
 @router.message(SeamstressStates.waiting_for_qr)
 async def process_batch_qr(message: types.Message, state: FSMContext):
     try:
-        # Заменяем проблемную строку с json-сериализацией
         logger.debug("Received message: %s", message.model_dump_json())
+        batch_id = None
         
-        # Проверяем вложение фото
-        if message.photo:
-            photo = message.photo[-1]
-        elif message.document and message.document.mime_type.startswith('image/'):
-            photo = message.document
+        # Проверяем текстовое сообщение с ID пачки
+        if message.text and message.text.isdigit():
+            batch_id = int(message.text)
         else:
-            await message.answer("❌ Отправьте изображение как фото!")
-            return
-        
-        file = await message.bot.get_file(photo.file_id)
-        image_data = await message.bot.download_file(file.file_path)
-        
-        temp_filename = f"temp_qr_{message.from_user.id}_{message.message_id}.jpg"
-    
-        with open(temp_filename, "wb") as f:
-            f.write(image_data.getvalue())
-        # Декодируем QR
-        os.remove(temp_filename)
-        try:
-            qr_text = await process_qr_code(image_data.read())
-            logger.info(f"Decoded QR: {qr_text}")
-        except Exception as decode_error:
-            await message.answer("❌ Не удалось прочитать QR-код. Убедитесь что:")
-            await message.answer("- Фото хорошо освещено\n- QR-код в фокусе\n- Нет бликов")
-            raise decode_error
-        
-        batch_id = int(qr_text)
-        
-        # Ищем пачку в БД
+            # Обрабатываем изображение QR-кода
+            if message.photo:
+                photo = message.photo[-1]
+            elif message.document and message.document.mime_type.startswith('image/'):
+                photo = message.document
+            else:
+                await message.answer("❌ Отправьте фото QR-кода или введите ID пачки")
+                return
+
+            file = await message.bot.get_file(photo.file_id)
+            image_data = await message.bot.download_file(file.file_path)
+            
+            try:
+                qr_text = await process_qr_code(image_data.read())
+                logger.info(f"Decoded QR: {qr_text}")
+                batch_id = int(qr_text)
+            except Exception as decode_error:
+                await message.answer("❌ Не удалось прочитать QR-код. Убедитесь что:")
+                await message.answer("- Фото хорошо освещено\n- QR-код в фокусе\n- Нет бликов")
+                raise decode_error
+
+        # Поиск пачки в БД
         async with db.execute(
             """SELECT batch_id, project_nm, product_nm, color, size, quantity, parts_count, status, seamstress_id
             FROM batches 
@@ -133,7 +130,6 @@ async def process_batch_qr(message: types.Message, state: FSMContext):
         await state.update_data(batch_data=batch_data)
         await state.set_state(SeamstressStates.confirm_batch)
         
-        # Формируем сообщение с данными
         response = (
             f"ID: {batch_data[0]}\n"
             f"Проект: {batch_data[1]}\n"
@@ -151,9 +147,12 @@ async def process_batch_qr(message: types.Message, state: FSMContext):
             reply_markup=seamstress_batch()
         )
         
+    except ValueError:
+        await message.answer("❌ ID пачки должен быть целым числом")
+        await state.set_state(SeamstressStates.waiting_for_qr)
     except Exception as e:
-        logger.error("QR processing failed: %s", traceback.format_exc())
-        await message.answer("❌ Ошибка обработки QR-кода. Попробуйте еще раз!")
+        logger.error("Processing failed: %s", traceback.format_exc())
+        await message.answer("❌ Ошибка обработки. Проверьте данные и попробуйте еще раз!")
         await state.set_state(SeamstressStates.waiting_for_qr)
 
 @router.callback_query(lambda c: c.data == 'accept_batch', SeamstressStates.confirm_batch)
@@ -254,7 +253,7 @@ async def show_batch_details(callback: types.CallbackQuery, state: FSMContext):
             f"Тип: {batch_data[11]}\n"
         )
         if batch_data[9] == 'брак на переделке':
-            response = "🔄 Пачка отправлена на переделку\n\n" + response + "\n\n📤 Отправьте QR-код пачки для начала работы"
+            response = "🔄 Пачка отправлена на переделку\n\n" + response + "\n\n📤 Отправьте QR-код или id пачки для начала работы"
             await state.set_state(SeamstressStates.waiting_for_qr)
             await callback.message.edit_text(response, reply_markup=cancel_button_seamstress())
             

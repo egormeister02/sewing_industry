@@ -61,7 +61,7 @@ async def show_controller_data(callback: types.CallbackQuery):
 async def take_batch_start(callback: types.CallbackQuery, state: FSMContext):
     await state.set_state(ControllerStates.waiting_for_qr)
     await callback.message.edit_text(
-        "📤 Отправьте фото QR-кода пачки",
+        "📤 Отправьте фото QR-кода пачки или id пачки",
         reply_markup=cancel_button_controller()
     )
     await callback.answer()
@@ -69,35 +69,33 @@ async def take_batch_start(callback: types.CallbackQuery, state: FSMContext):
 @router.message(ControllerStates.waiting_for_qr)
 async def process_batch_qr(message: types.Message, state: FSMContext):
     try:
-        qr_text = "Не распознан"
-        # Заменяем проблемную строку с json-сериализацией
         logger.debug("Received message: %s", message.model_dump_json())
+        batch_id = None
         
-        # Проверяем вложение фото
-        if message.photo:
-            photo = message.photo[-1]
-        elif message.document and message.document.mime_type.startswith('image/'):
-            photo = message.document
+        # Проверяем текстовое сообщение с ID пачки
+        if message.text and message.text.isdigit():
+            batch_id = int(message.text)
         else:
-            await message.answer("❌ Отправьте изображение как фото!")
-            return
-        
-        file = await message.bot.get_file(photo.file_id)
-        image_data = await message.bot.download_file(file.file_path)
-        
-        # Читаем данные напрямую как bytes
-        image_bytes = image_data.getvalue()  
-        
-        # Декодируем QR
-        try:
-            qr_text = await process_qr_code(image_bytes)
-            print(f"Decoded QR: {qr_text}")
-        except Exception as decode_error:
-            await message.answer("❌ Не удалось прочитать QR-код. Убедитесь что:")
-            await message.answer("- Фото хорошо освещено\n- QR-код в фокусе\n- Нет бликов")
-            raise decode_error
-        
-        batch_id = int(qr_text)
+            # Обрабатываем изображение QR-кода
+            if message.photo:
+                photo = message.photo[-1]
+            elif message.document and message.document.mime_type.startswith('image/'):
+                photo = message.document
+            else:
+                await message.answer("❌ Отправьте фото QR-кода или введите ID пачки")
+                return
+
+            file = await message.bot.get_file(photo.file_id)
+            image_data = await message.bot.download_file(file.file_path)
+            
+            try:
+                qr_text = await process_qr_code(image_data.read())
+                logger.info(f"Decoded QR: {qr_text}")
+                batch_id = int(qr_text)
+            except Exception as decode_error:
+                await message.answer("❌ Не удалось прочитать QR-код. Убедитесь что:")
+                await message.answer("- Фото хорошо освещено\n- QR-код в фокусе\n- Нет бликов")
+                raise decode_error
         
         # Ищем пачку в БД
         async with db.execute(
