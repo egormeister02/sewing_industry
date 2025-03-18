@@ -682,7 +682,9 @@ async def process_payment_amount(message: types.Message, state: FSMContext):
 
             await send_payment_notification(employee_id, 'премия', amount - data['amount_due'], None)
             amount = data['amount_due']
-                        
+
+        if data['amount_due'] < 0 and payment_type == 'зарплата':
+            payment_type = 'премия'
         # Добавляем запись в таблицу payments
         async with db.execute(
             """INSERT INTO payments (employee_id, amount, type) VALUES (?, ?, ?)""",
