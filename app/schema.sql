@@ -70,9 +70,8 @@ SELECT
 FROM 
     employees e
 LEFT JOIN 
-    (SELECT employee_id, SUM(amount) AS total_payments 
+    (SELECT employee_id, SUM(CASE WHEN type = 'премия' THEN -amount ELSE amount END) AS total_payments 
      FROM payments 
-     WHERE type = 'зарплата' or type = 'штраф'
      GROUP BY employee_id) p ON e.tg_id = p.employee_id
 LEFT JOIN 
     (SELECT 

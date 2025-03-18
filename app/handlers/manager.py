@@ -609,7 +609,7 @@ async def process_role_selection(callback: types.CallbackQuery, state: FSMContex
         buttons = [
             [InlineKeyboardButton(text=employee['name'], callback_data=f'pay_{employee['tg_id']}')] for employee in employees
         ]
-        buttons.append([InlineKeyboardButton(text="Назад", callback_data="cancel_manager")])
+        buttons.append([InlineKeyboardButton(text="Отмена", callback_data="cancel_manager")])
         keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
 
         await state.update_data(role=role)
@@ -669,22 +669,20 @@ async def process_payment_type_selection(callback: types.CallbackQuery, state: F
 async def process_payment_amount(message: types.Message, state: FSMContext):
     try:
         amount = int(message.text)
+        if amount < 0:
+            await delete_message_reply_markup(message)
+            await message.answer("❌ Сумма выплаты не может быть отрицательной\n"
+                                 "Пожалуйста, введите сумму больше или равную 0", reply_markup=cancel_button_manager())
+            return
         data = await state.get_data()
         employee_id = data['employee_id']
         payment_type = data['payment_type']
 
-        if amount > data['amount_due'] and payment_type == 'зарплата' and data['amount_due'] > 0:
-            async with db.execute(
-                """INSERT INTO payments (employee_id, amount, type) VALUES (?, ?, ?)""",
-                (employee_id, amount - data['amount_due'], 'премия')
-            ) as cursor:
-                await cursor.fetchall()
-
-            await send_payment_notification(employee_id, 'премия', amount - data['amount_due'], None)
-            amount = data['amount_due']
-
-        if data['amount_due'] < 0 and payment_type == 'зарплата':
-            payment_type = 'премия'
+        if amount > data['amount_due'] and payment_type == 'зарплата':
+            await delete_message_reply_markup(message)
+            await message.answer("❌ Сумма выплаты превышает ожидаемую сумму\n"
+                                 "Пожалуйста, введите сумму меньше или равную ожидаемой сумме", reply_markup=cancel_button_manager())
+            return
         # Добавляем запись в таблицу payments
         async with db.execute(
             """INSERT INTO payments (employee_id, amount, type) VALUES (?, ?, ?)""",
@@ -694,12 +692,14 @@ async def process_payment_amount(message: types.Message, state: FSMContext):
 
         await message.answer("✅ Выплата успешно добавлена!")
         await send_payment_notification(employee_id, payment_type, amount, data['role'])
+        await delete_message_reply_markup(message)
         await state.clear()
         await show_manager_menu(message)
     except ValueError:
         await message.answer("Пожалуйста, введите корректное целое число.")
     except Exception as e:
         await message.answer(f"Ошибка при добавлении выплаты: {str(e)}")
+        await delete_message_reply_markup(message)
         await state.clear()
         await show_manager_menu(message)
 
