@@ -1,5 +1,11 @@
 import os
 os.environ['TZ'] = 'Europe/Moscow'
+from datetime import datetime
+import pytz
+# Установите часовой пояс
+moscow_tz = pytz.timezone('Europe/Moscow')
+now = datetime.now(moscow_tz)
+
 
 from quart import Quart, request, jsonify
 from aiogram import Dispatcher, types
