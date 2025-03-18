@@ -82,7 +82,7 @@ LEFT JOIN
     LEFT JOIN 
         batches b ON e.tg_id = b.cutter_id OR e.tg_id = b.seamstress_id
     WHERE 
-        e.job IN ('швея', 'раскройщик')
+        e.job = 'раскройщик' or (e.job = 'швея' and b.status in ('готово', 'брак'))
     GROUP BY 
         e.tg_id) b ON e.tg_id = b.tg_id
 WHERE 
