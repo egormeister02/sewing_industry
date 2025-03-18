@@ -34,10 +34,10 @@ scheduler = AsyncIOScheduler()
 def start_scheduler():
     # Запланировать выполнение функции full_sync каждый день в 4:00
     scheduler.add_job(
-        func=lambda: asyncio.create_task(db.sheets.full_sync()),
+        func=lambda: asyncio.run(db.sheets.full_sync()),
         trigger='cron',
-        hour=4,
-        minute=0
+        hour=5,
+        minute=4
     )
     scheduler.start()
 

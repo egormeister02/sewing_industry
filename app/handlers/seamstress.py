@@ -325,7 +325,7 @@ async def show_seamstress_payments(callback: types.CallbackQuery):
     
     # Получаем все выплаты для данного пользователя
     async with db.execute(
-        "SELECT amount, payment_date FROM payments WHERE employee_id = ?",
+        "SELECT amount, type, payment_date FROM payments WHERE employee_id = ?",
         (user_id,)
     ) as cursor:
         payments = await cursor.fetchall();
@@ -337,18 +337,19 @@ async def show_seamstress_payments(callback: types.CallbackQuery):
     ) as cursor:
         payment_info = await cursor.fetchone();
     total_payments = payment_info['total_payments'] if payment_info else 0;
-    total_seamstress_pay = payment_info['total_pay'] if payment_info else 0;
+    total_pay = payment_info['total_pay'] if payment_info else 0;
 
     # Формируем сообщение с выплатами
     payment_details = "\n".join(
-        [f"Сумма: {payment['amount']} | Дата: {payment['payment_date']}" for payment in payments]
+        [f"{'Начислена зарплата' if payment['type'] == 'зарплата' else 'Выписана премия' if payment['type'] == 'премия' else 'Выписан штраф'} | Сумма: {payment['amount']} руб. | Дата: {payment['payment_date']}" 
+         for payment in payments]
     ) if payments else "Нет выплат.";
 
     response_message = (
         f"Ваши выплаты:\n{payment_details}\n\n"
-        f"Сумма предстоящих выплат: {total_seamstress_pay - total_payments}"
+        f"Сумма предстоящих выплат: {total_pay - total_payments}"
     );
 
-    await callback.message.edit_text(response_message);
+    await callback.message.edit_text(response_message)
+    await callback.answer()
     await new_seamstress_menu(callback)
-    await callback.answer();

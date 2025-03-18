@@ -39,6 +39,7 @@ COLUMN_TRANSLATIONS = {
         'payment_id': 'ID выплаты',
         'employee_id': 'ID сотрудника',
         'amount': 'Сумма',
+        'type': 'Тип',
         'payment_date': 'Дата выплаты'
     }
 }

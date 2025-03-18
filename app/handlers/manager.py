@@ -7,7 +7,7 @@ from app.keyboards.inline import manager_menu, manager_batch_decision, cancel_bu
 from app.database import db
 from app.services import generate_qr_code
 from app.services.qr_processing import process_qr_code
-from app.handlers.trunk import delete_message_reply_markup
+from app.handlers.trunk import delete_message_reply_markup, send_payment_notification
 from app.services.update_from_sheets import sync_db_to_sheets
 from app.bot import bot
 import logging
@@ -612,6 +612,8 @@ async def process_role_selection(callback: types.CallbackQuery, state: FSMContex
         buttons.append([InlineKeyboardButton(text="Назад", callback_data="cancel_manager")])
         keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
 
+        await state.update_data(role=role)
+
         await callback.message.edit_text("Выберите сотрудника для выплаты:", reply_markup=keyboard)
         await callback.answer()
     else:
@@ -627,14 +629,39 @@ async def process_employee_selection(callback: types.CallbackQuery, state: FSMCo
         (employee_id,)
     ) as cursor:
         employee_info = await cursor.fetchone()
+    
     total_pay = employee_info['total_pay']
     total_payments = employee_info['total_payments']
     amount_due = total_pay - total_payments
+    
+    # Создаем кнопки для выбора типа выплаты
+    payment_types = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="Зарплата", callback_data="payment_type_зарплата"),
+            InlineKeyboardButton(text="Премия", callback_data="payment_type_премия"),
+            InlineKeyboardButton(text="Штраф", callback_data="payment_type_штраф")
+        ],
+        [InlineKeyboardButton(text="Отмена", callback_data="cancel_manager")]
+    ])
+    
     await callback.message.edit_text(
-        f"Сотрудник: {employee_info['name']}\nОжидаемая сумма: {amount_due}\nВведите сумму выплаты:",
+        f"Сотрудник: {employee_info['name']}\nОжидаемая сумма: {amount_due}\nВыберите тип выплаты:",
+        reply_markup=payment_types
+    )
+    await state.update_data(employee_id=employee_id, amount_due=amount_due)
+    await state.set_state(ManagerStates.waiting_for_payment_type)
+    await callback.answer()
+
+@router.callback_query(lambda c: c.data.startswith('payment_type_'), ManagerStates.waiting_for_payment_type)
+async def process_payment_type_selection(callback: types.CallbackQuery, state: FSMContext):
+    payment_type = callback.data.split('_')[-1]
+    await state.update_data(payment_type=payment_type)
+    
+    await callback.message.edit_reply_markup(reply_markup=None)
+    await callback.message.answer(
+        "Введите сумму:",
         reply_markup=cancel_button_manager()
     )
-    await state.update_data(employee_id=employee_id)
     await state.set_state(ManagerStates.waiting_for_payment_amount)
     await callback.answer()
 
@@ -644,15 +671,27 @@ async def process_payment_amount(message: types.Message, state: FSMContext):
         amount = int(message.text)
         data = await state.get_data()
         employee_id = data['employee_id']
+        payment_type = data['payment_type']
 
+        if amount > data['amount_due'] and payment_type == 'зарплата':
+            async with db.execute(
+                """INSERT INTO payments (employee_id, amount, type) VALUES (?, ?, ?)""",
+                (employee_id, amount - data['amount_due'], 'премия')
+            ) as cursor:
+                await cursor.fetchall()
+
+            await send_payment_notification(employee_id, 'премия', amount - data['amount_due'], None)
+            amount = data['amount_due']
+                        
         # Добавляем запись в таблицу payments
         async with db.execute(
-            """INSERT INTO payments (employee_id, amount) VALUES (?, ?)""",
-            (employee_id, amount)
+            """INSERT INTO payments (employee_id, amount, type) VALUES (?, ?, ?)""",
+            (employee_id, amount, payment_type)
         ) as cursor:
             await cursor.fetchall()
 
         await message.answer("✅ Выплата успешно добавлена!")
+        await send_payment_notification(employee_id, payment_type, amount, data['role'])
         await state.clear()
         await show_manager_menu(message)
     except ValueError:

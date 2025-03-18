@@ -33,6 +33,7 @@ class ManagerStates(StatesGroup):
     waiting_for_qr = State()
     confirm_batch = State()
     waiting_for_payment_amount = State()
+    waiting_for_payment_type = State()
 
 class RegistrationStates(StatesGroup):
     waiting_for_name = State()

@@ -242,7 +242,7 @@ async def show_cutter_payments(callback: types.CallbackQuery):
     
     # Получаем все выплаты для данного пользователя
     async with db.execute(
-        "SELECT amount, payment_date FROM payments WHERE employee_id = ?",
+        "SELECT amount, type, payment_date FROM payments WHERE employee_id = ?",
         (user_id,)
     ) as cursor:
         payments = await cursor.fetchall();
@@ -258,7 +258,8 @@ async def show_cutter_payments(callback: types.CallbackQuery):
 
     # Формируем сообщение с выплатами
     payment_details = "\n".join(
-        [f"Сумма: {payment['amount']} | Дата: {payment['payment_date']}" for payment in payments]
+        [f"{'Начислена зарплата' if payment['type'] == 'зарплата' else 'Выписана премия' if payment['type'] == 'премия' else 'Выписан штраф'} | Сумма: {payment['amount']} руб. | Дата: {payment['payment_date']}" 
+         for payment in payments]
     ) if payments else "Нет выплат.";
 
     response_message = (

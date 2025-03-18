@@ -54,6 +54,7 @@ CREATE TABLE IF NOT EXISTS payments (
     payment_id INTEGER PRIMARY KEY AUTOINCREMENT,
     employee_id INT,
     amount INT CHECK(amount > 0),
+    type VARCHAR(64) CHECK(type IN ('зарплата', 'премия', 'штраф')),
     payment_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
     FOREIGN KEY(employee_id) REFERENCES employees(tg_id)
@@ -71,6 +72,7 @@ FROM
 LEFT JOIN 
     (SELECT employee_id, SUM(amount) AS total_payments 
      FROM payments 
+     WHERE type = 'зарплата' or type = 'штраф'
      GROUP BY employee_id) p ON e.tg_id = p.employee_id
 LEFT JOIN 
     (SELECT 
@@ -137,6 +139,7 @@ CREATE TABLE IF NOT EXISTS payments_audit (
     payment_id INT,
     employee_id INT,
     amount INT,
+    type VARCHAR(64),
     payment_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     action_type VARCHAR(10) NOT NULL CHECK(action_type IN ('INSERT', 'UPDATE', 'DELETE'))
 );
@@ -144,22 +147,22 @@ CREATE TABLE IF NOT EXISTS payments_audit (
 CREATE TRIGGER IF NOT EXISTS log_payment_insert
 AFTER INSERT ON payments
 BEGIN
-    INSERT INTO payments_audit (payment_id, employee_id, amount, payment_date, action_type)
-    VALUES (NEW.payment_id, NEW.employee_id, NEW.amount, NEW.payment_date, 'INSERT');
+    INSERT INTO payments_audit (payment_id, employee_id, amount, type, payment_date, action_type)
+    VALUES (NEW.payment_id, NEW.employee_id, NEW.amount, NEW.type, NEW.payment_date, 'INSERT');
 END;
 
 CREATE TRIGGER IF NOT EXISTS log_payment_update
 AFTER UPDATE ON payments
 BEGIN
-    INSERT INTO payments_audit (payment_id, employee_id, amount, payment_date, action_type)
-    VALUES (NEW.payment_id, NEW.employee_id, NEW.amount, NEW.payment_date, 'UPDATE');
+    INSERT INTO payments_audit (payment_id, employee_id, amount, type, payment_date, action_type)
+    VALUES (NEW.payment_id, NEW.employee_id, NEW.amount, NEW.type, NEW.payment_date, 'UPDATE');
 END;
 
 CREATE TRIGGER IF NOT EXISTS log_payment_delete
 AFTER DELETE ON payments
 BEGIN
-    INSERT INTO payments_audit (payment_id, employee_id, amount, payment_date, action_type)
-    VALUES (OLD.payment_id, OLD.employee_id, OLD.amount, OLD.payment_date, 'DELETE');
+    INSERT INTO payments_audit (payment_id, employee_id, amount, type, payment_date, action_type)
+    VALUES (OLD.payment_id, OLD.employee_id, OLD.amount, OLD.type, OLD.payment_date, 'DELETE');
 END;
 
 

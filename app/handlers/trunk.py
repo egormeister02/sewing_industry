@@ -4,10 +4,10 @@ from app.keyboards.inline import role_keyboard, cancel_button_trunk, approval_ke
 from aiogram import Router, types
 from aiogram.fsm.context import FSMContext
 from app.states import RegistrationStates, RemakeRequest
-from app.handlers import manager
 from app.bot import bot
 from app import db
-
+import logging
+logger = logging.getLogger(__name__)
 router = Router()
 
 async def delete_message_reply_markup(message: types.Message):
@@ -294,4 +294,37 @@ async def cancel_trunk_actions(callback: types.CallbackQuery, state: FSMContext)
         
     await callback.answer()
 
+async def send_payment_notification(tg_id: int, type: str, amount: int, role: str):
 
+    try:
+        payment_type = type.replace('<', '&lt;').replace('>', '&gt;')
+        if payment_type == 'зарплата':
+            emoji = '🧳'
+            text = f"{emoji} Вам начислена {payment_type}!\nСумма: {amount} руб."
+        elif payment_type == 'премия':
+            emoji = '🎉'
+            text = f"{emoji} Вам начислена {payment_type}!\nСумма: {amount} руб."
+        elif payment_type == 'штраф':
+            emoji = '⚠️'
+            text = f"{emoji} Вам выписан {payment_type}!\nСумма: -{amount} руб."
+        else:
+            emoji = '💰'
+            text = f"{emoji} Вам начислена {payment_type}!\nСумма: {amount} руб."
+        
+        await bot.send_message(
+            chat_id=tg_id,
+            text=text,
+            parse_mode='HTML'
+        )
+        if role:
+            menu_func = await get_menu_function(role)
+            await bot.send_message(
+                chat_id=tg_id,
+            text="меню:",
+            reply_markup=menu_func()
+        )
+        return True
+        
+    except Exception as e:
+        logger.error(f"Payment notification error: {str(e)}")
+        return False
