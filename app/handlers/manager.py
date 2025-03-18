@@ -276,11 +276,11 @@ async def process_parts_count(message: types.Message, state: FSMContext):
         # Сохраняем данные в БД
         async with db.execute(
             """INSERT INTO batches \
-            (project_nm, product_nm, color, size, quantity, parts_count, cutter_id, status, type)\
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)\
+            (project_nm, product_nm, color, size, quantity, parts_count, cutter_id, status, type, created_at)\
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)\
             RETURNING batch_id""",
             (data['project_name'], data['product_name'], data['color'], \
-             data['size'], data['quantity'], parts_count, message.from_user.id, 'создана', data['batch_type'])
+             data['size'], data['quantity'], parts_count, message.from_user.id, 'создана', data['batch_type'], datetime.now())
         ) as cursor:
             result = await cursor.fetchone()
             if not result or not result[0]:
@@ -533,9 +533,9 @@ async def handle_batch_decision(callback: types.CallbackQuery, state: FSMContext
                 """UPDATE batches \
                 SET status = 'готово', \
                     controller_id = ?, \
-                    control_dttm = CURRENT_TIMESTAMP \
+                    control_dttm = ? \
                 WHERE batch_id = ?""",
-                (user_id, batch_id)
+                (user_id, datetime.now(), batch_id)
             ) as cursor:
                 await db.fetchall(cursor)
             msg = "✅ Пачка успешно принята!"
@@ -545,21 +545,21 @@ async def handle_batch_decision(callback: types.CallbackQuery, state: FSMContext
                 """UPDATE batches \
                 SET status = 'неисправимый брак', \
                     controller_id = ?, \
-                    control_dttm = CURRENT_TIMESTAMP \
+                    control_dttm = ? \
                 WHERE batch_id = ?""",
-                (user_id, batch_id)
+                (user_id, datetime.now(), batch_id)
             ) as cursor:
                 await db.fetchall(cursor)
             msg = "❌ Пачка помечена как брак!"
             
         elif action == "remake":
             async with db.execute(
-                """UPDATE batches \
+                """ATE batches \
                 SET status = 'брак на переделке', \
                     controller_id = ?, \
-                    control_dttm = CURRENT_TIMESTAMP \
+                    control_dttm = ? \
                 WHERE batch_id = ?""",
-                (user_id, batch_id)
+                (user_id, datetime.now(), batch_id)
             ) as cursor:
                 await db.fetchall(cursor)
             msg = "🔄 Пачка отправлена на переделку"
@@ -685,8 +685,8 @@ async def process_payment_amount(message: types.Message, state: FSMContext):
             return
         # Добавляем запись в таблицу payments
         async with db.execute(
-            """INSERT INTO payments (employee_id, amount, type) VALUES (?, ?, ?)""",
-            (employee_id, amount, payment_type)
+            """INSERT INTO payments (employee_id, amount, type, payment_date) VALUES (?, ?, ?, ?)""",
+            (employee_id, amount, payment_type, datetime.now())
         ) as cursor:
             await cursor.fetchall()
 

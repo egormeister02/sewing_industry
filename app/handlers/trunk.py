@@ -7,6 +7,7 @@ from app.states import RegistrationStates, RemakeRequest
 from app.bot import bot
 from app import db
 import logging
+from datetime import datetime
 logger = logging.getLogger(__name__)
 router = Router()
 
@@ -257,9 +258,9 @@ async def process_remake_description(message: types.Message, state: FSMContext):
         
         async with db.execute(
             """INSERT INTO remakes 
-            (equipment_nm, description, applicant_id, status)
-            VALUES (?, ?, ?, 'создана')""",
-            (data['equipment'], safe_description, message.from_user.id)
+            (equipment_nm, description, applicant_id, status, created_at)
+            VALUES (?, ?, ?, 'создана', ?)""",
+            (data['equipment'], safe_description, message.from_user.id, datetime.now())
         ) as cursor:
             await db.fetchall(cursor)
             

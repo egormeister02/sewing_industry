@@ -7,7 +7,7 @@ from app.keyboards.inline import cutter_menu, cancel_button_cutter, back_cancel_
 from app.services import generate_qr_code
 from app.handlers.trunk import delete_message_reply_markup
 from app import db
-
+from datetime import datetime
 router = Router()
 
 async def show_cutter_menu(event):
@@ -192,11 +192,11 @@ async def process_parts_count(message: types.Message, state: FSMContext):
         # Сохраняем данные в БД
         async with db.execute(
             """INSERT INTO batches \
-            (project_nm, product_nm, color, size, quantity, parts_count, cutter_id, status, type)\
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)\
+            (project_nm, product_nm, color, size, quantity, parts_count, cutter_id, status, type, created_at)\
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)\
             RETURNING batch_id""",
             (data['project_name'], data['product_name'], data['color'], \
-             data['size'], data['quantity'], parts_count, message.from_user.id, 'создана', batch_type)
+             data['size'], data['quantity'], parts_count, message.from_user.id, 'создана', batch_type, datetime.now())
         ) as cursor:
             result = await cursor.fetchone()
             if not result or not result[0]:

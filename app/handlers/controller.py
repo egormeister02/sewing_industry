@@ -7,7 +7,7 @@ from app.keyboards.inline import controller_menu, cancel_button_controller, cont
 from app import bot
 from app import db
 from app.services.qr_processing import process_qr_code
-
+from datetime import datetime
 logger = logging.getLogger(__name__)
 
 router = Router()
@@ -172,9 +172,9 @@ async def handle_batch_decision(callback: types.CallbackQuery, state: FSMContext
                 """UPDATE batches 
                 SET status = 'готово', 
                     controller_id = ?,
-                    control_dttm = CURRENT_TIMESTAMP
+                    control_dttm = ?
                 WHERE batch_id = ?""",
-                (user_id, batch_id)
+                (user_id, datetime.now(), batch_id)
             ) as cursor:
                 await db.fetchall(cursor)
             msg = "✅ Пачка успешно принята!"
@@ -184,9 +184,9 @@ async def handle_batch_decision(callback: types.CallbackQuery, state: FSMContext
                 """UPDATE batches 
                 SET status = 'неисправимый брак', 
                     controller_id = ?,
-                    control_dttm = CURRENT_TIMESTAMP
+                    control_dttm = ?
                 WHERE batch_id = ?""",
-                (user_id, batch_id)
+                (user_id, datetime.now(), batch_id)
             ) as cursor:
                 await db.fetchall(cursor)
             msg = "❌ Пачка помечена как брак!"
@@ -197,9 +197,9 @@ async def handle_batch_decision(callback: types.CallbackQuery, state: FSMContext
                 """UPDATE batches 
                 SET status = 'брак на переделке', 
                     controller_id = ?,
-                    control_dttm = CURRENT_TIMESTAMP
+                    control_dttm = ?
                 WHERE batch_id = ?""",
-                (user_id, batch_id)
+                (user_id, datetime.now(), batch_id)
             ) as cursor:
                 await db.fetchall(cursor)
             

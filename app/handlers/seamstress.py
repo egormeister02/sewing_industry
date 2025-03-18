@@ -6,7 +6,7 @@ from app.keyboards.inline import seamstress_menu, cancel_button_seamstress, seam
 from app import db
 import traceback
 import logging
-import os
+from datetime import datetime
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -166,9 +166,9 @@ async def accept_batch(callback: types.CallbackQuery, state: FSMContext):
         
         async with db.execute(
             """UPDATE batches 
-            SET seamstress_id = ?, status = ?, sew_start_dttm = CURRENT_TIMESTAMP
+            SET seamstress_id = ?, status = ?, sew_start_dttm = ?
             WHERE batch_id = ?""",
-            (callback.from_user.id, new_status, data['batch_data'][0])
+            (callback.from_user.id, new_status, datetime.now(), data['batch_data'][0])
         ):
             await callback.message.edit_text("✅ Пачка успешно принята в работу!")
             await state.clear()
@@ -286,9 +286,9 @@ async def finish_batch_handler(callback: types.CallbackQuery, state: FSMContext)
 
         async with db.execute(
             """UPDATE batches 
-            SET status = ?, sew_end_dttm = CURRENT_TIMESTAMP 
+            SET status = ?, sew_end_dttm = ? 
             WHERE batch_id = ?""",
-            (new_status, batch_id)
+            (new_status, datetime.now(), batch_id)
         ) as cursor:
             await db.fetchall(cursor)
             
