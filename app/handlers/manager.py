@@ -473,7 +473,12 @@ async def process_batch_id(message: types.Message, state: FSMContext, batch_id: 
             await show_manager_menu(message)
             return
         
-        elif batch_data[8] == 'шьется' or batch_data[8] == 'создана' or batch_data[8] == 'переделка начата':
+        elif batch_data[8] == 'готово' or batch_data[8] == 'неисправимый брак':
+            await message.answer(f"❌ Пачка уже проверена \n статус: {batch_data[8]}")
+            await state.clear()
+            await show_manager_menu(message)
+        
+        elif batch_data[8] == 'шьется' or batch_data[8] == 'создана' or batch_data[8] == 'переделка начата' or batch_data[8] == 'брак на переделке':
             await message.answer("❌ Пачка еще не пошита")
             await state.clear()
             await show_manager_menu(message)
@@ -510,7 +515,7 @@ async def process_batch_id(message: types.Message, state: FSMContext, batch_id: 
             )
     except Exception as e:
         logger.error("QR processing failed: %s", traceback.format_exc())
-        await message.answer("❌ Ошибка обработки QR-кода. Попробуйте еще раз!", reply_markup=cancel_button_manager())
+        await message.answer(f"❌ Ошибка обработки {e}", reply_markup=cancel_button_manager())
         await state.set_state(ManagerStates.waiting_for_qr)
 
 @router.callback_query(ManagerStates.confirm_batch)
@@ -669,20 +674,25 @@ async def process_payment_type_selection(callback: types.CallbackQuery, state: F
 async def process_payment_amount(message: types.Message, state: FSMContext):
     try:
         amount = int(message.text)
+        # Удаляем клавиатуру у предыдущего сообщения
+        await delete_message_reply_markup(message)
+        
         if amount < 0:
-            await delete_message_reply_markup(message)
             await message.answer("❌ Сумма выплаты не может быть отрицательной\n"
-                                 "Пожалуйста, введите сумму больше или равную 0", reply_markup=cancel_button_manager())
+                               "Пожалуйста, введите сумму больше или равную 0", 
+                               reply_markup=cancel_button_manager())
             return
+            
         data = await state.get_data()
         employee_id = data['employee_id']
         payment_type = data['payment_type']
 
         if amount > data['amount_due'] and payment_type == 'зарплата':
-            await delete_message_reply_markup(message)
             await message.answer("❌ Сумма выплаты превышает ожидаемую сумму\n"
-                                 "Пожалуйста, введите сумму меньше или равную ожидаемой сумме", reply_markup=cancel_button_manager())
+                               "Пожалуйста, введите сумму меньше или равную ожидаемой сумме", 
+                               reply_markup=cancel_button_manager())
             return
+
         # Добавляем запись в таблицу payments
         async with db.execute(
             """INSERT INTO payments (employee_id, amount, type, payment_date) VALUES (?, ?, ?, ?)""",
@@ -691,15 +701,16 @@ async def process_payment_amount(message: types.Message, state: FSMContext):
             await cursor.fetchall()
 
         await message.answer("✅ Выплата успешно добавлена!")
-        await send_payment_notification(employee_id, payment_type, amount, data['role'])
-        await delete_message_reply_markup(message)
+        await send_payment_notification(employee_id, payment_type, amount, data['role'])        
         await state.clear()
         await show_manager_menu(message)
+        
     except ValueError:
-        await message.answer("Пожалуйста, введите корректное целое число.")
+        await message.answer("Пожалуйста, введите корректное целое число.",
+                           reply_markup=cancel_button_manager())
     except Exception as e:
-        await message.answer(f"Ошибка при добавлении выплаты: {str(e)}")
-        await delete_message_reply_markup(message)
+        logger.error(f"Payment error: {str(e)}")
+        await message.answer(f"❌ Ошибка при добавлении выплаты: {str(e)}")
         await state.clear()
         await show_manager_menu(message)
 
